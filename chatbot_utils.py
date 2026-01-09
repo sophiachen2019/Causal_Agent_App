@@ -128,4 +128,5 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     
     response_stream = chat.send_message_stream(current_message)
     
-    return response_stream
+    for chunk in response_stream:
+        yield chunk
