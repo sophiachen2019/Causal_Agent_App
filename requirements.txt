@@ -5,6 +5,8 @@ pandas
 numpy
 scikit-learn
 matplotlib
+google-generativeai
+statsmodels
 
 # --- Metadata ---
 # Release: 2.2.0 | 2026-01-08 | Added AI Assistant (Chatbot), Quick Start Questions, and Updated User Guide.
