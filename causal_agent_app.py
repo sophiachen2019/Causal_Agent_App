@@ -1815,14 +1815,17 @@ with tab_chat:
     # 3. Quick Start Questions
     if st.session_state.messages[-1]["role"] != "user":
         st.caption("Common Questions:")
-        bq1, bq2, bq3 = st.columns(3)
+        bq1, bq2, bq3, bq4 = st.columns(4)
         if bq1.button("📊 Summarize Data"):
             st.session_state.messages.append({"role": "user", "content": "Can you summarize the current dataset and its key features?"})
             st.rerun()
-        if bq2.button("💡 Suggest Method"):
+        if bq2.button("📈 Visualize Data"):
+            st.session_state.messages.append({"role": "user", "content": "Can you help me visualize the relationship between the treatment and outcome?"})
+            st.rerun()
+        if bq3.button("💡 Suggest Method"):
             st.session_state.messages.append({"role": "user", "content": "Based on this data, what causal estimation method would you recommend?"})
             st.rerun()
-        if bq3.button("❓ Explain LinearDML"):
+        if bq4.button("❓ Explain LinearDML"):
             st.session_state.messages.append({"role": "user", "content": "Explain how Linear Double Machine Learning (LinearDML) works in simple terms."})
             st.rerun()
 
