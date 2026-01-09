@@ -1,22 +1,15 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import streamlit as st
 import pandas as pd
 import os
 
-def configure_genai():
-    """Configures the Gemini API key from Streamlit secrets or environment variables."""
+def get_api_key():
+    """Retrieves the Gemini API key from Streamlit secrets or environment variables."""
     try:
-        api_key = st.secrets["GOOGLE_API_KEY"]
+        return st.secrets["GOOGLE_API_KEY"]
     except (FileNotFoundError, KeyError):
-        api_key = os.getenv("GOOGLE_API_KEY")
-    
-    if not api_key:
-        # Fallback for local development if not in secrets/env (optional, or raise error)
-        # For now, let's assume it must be present
-        return False
-    
-    genai.configure(api_key=api_key)
-    return True
+        return os.getenv("GOOGLE_API_KEY")
 
 def get_data_context(df):
     """
@@ -66,9 +59,9 @@ def get_app_context():
        - HTE: Heterogeneous Treatment Effects analysis.
     """
 
-def chat_stream(model_name, messages, data_context, app_context):
+def chat_stream(model_name, messages, data_context, app_context, api_key):
     """
-    Streams response from Gemini model.
+    Streams response from Gemini model using the new google.genai SDK.
     """
     # System Prompt
     system_prompt = f"""
@@ -94,47 +87,45 @@ def chat_stream(model_name, messages, data_context, app_context):
     - If the user asks for code, provide Python code compatible with the libraries used (pandas, econml, dowhy).
     """
     
+    # Initialize Client
+    client = genai.Client(api_key=api_key)
+    
     # Prepare history for Gemini
-    # Gemini expects 'user' and 'model' roles. Streamlit uses 'user' and 'assistant'.
-    gemini_history = []
+    # Gemini 2.0/new SDK uses 'user' and 'model' roles.
+    # Note: New SDK handles Chat formatting easier, but we need to convert Streamlit format.
     
-    # Add system prompt as the first part of the conversation (or as system instruction if supported, 
-    # but strictly prepending to the first message is often safer/easier for simple chat).
-    # Actually, let's look at `google.generativeai` chat history format.
-    # Ideally, we start a chat session.
+    formatted_history = []
     
-    model = genai.GenerativeModel(model_name)
+    # Prepend System Prompt to history or use config
+    # The new SDK supports 'config' with 'system_instruction'.
     
-    # transform streamlit messages to gemini format
-    # Streamlit: {"role": "user"/"assistant", "content": "..."}
-    # Gemini: {"role": "user"/"model", "parts": ["..."]}
+    config = types.GenerateContentConfig(
+        system_instruction=system_prompt,
+        temperature=0.7
+    )
+
+    # Convert messages
+    # Exclude the very last message which is the new prompt (we send it separately or let chat handle it?)
+    # Streamlit messages include the latest user prompt usually if we appended it before calling this.
+    # Let's check call site. Yes, keys are appended.
+    # But for 'chats.create', we pass history (excluding the new message) and then send the new message.
     
-    for msg in messages:
+    history_messages = messages[:-1]
+    current_message = messages[-1]["content"]
+    
+    for msg in history_messages:
         role = "user" if msg["role"] == "user" else "model"
-        gemini_history.append({"role": role, "parts": [msg["content"]]})
-        
-    # We want to inject the system prompt. A robust way with `chat` is to put it 
-    # in the history as a user message, or start the chat with it.
-    # However, since we are doing a stateless-like call where we pass full history each time 
-    # (or rather, we send the history to `start_chat`), let's construct the chat object.
+        formatted_history.append(types.Content(
+            role=role,
+            parts=[types.Part.from_text(text=msg["content"])]
+        ))
     
-    # IMPORTANT: The system instructions can be impactful. 
-    # Let's prepend it to the very first message if history exists, 
-    # otherwise send it as the first message.
+    chat = client.chats.create(
+        model=model_name,
+        history=formatted_history,
+        config=config
+    )
     
-    if not gemini_history:
-        # Should not happen if this is called after user input
-        gemini_history.append({"role": "user", "parts": [system_prompt]})
-    else:
-        # Prepend system context to the latest detailed data context?
-        # Actually, best practice: system instruction argument in `GenerativeModel` creation 
-        # is available in newer APIs, but let's stick to prepending to history or context.
-        # Let's add it as a "developer" or "system" type instruction if possible?
-        # Standard approach: Prepend to the first message.
-        first_part = gemini_history[0]["parts"][0]
-        gemini_history[0]["parts"][0] = system_prompt + "\n\nUser: " + first_part
-        
-    chat = model.start_chat(history=gemini_history[:-1]) # All but last
-    response = chat.send_message(gemini_history[-1]["parts"][0], stream=True)
+    response_stream = chat.send_message_stream(current_message)
     
-    return response
+    return response_stream
