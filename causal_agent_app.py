@@ -674,7 +674,7 @@ with tab_guide:
     
     st.markdown("""
     ## Welcome to the Causal Agent App
-    This application is designed to help you estimate causal effects from observational and A/B testing data using advanced statistical methods.
+    This application is designed to help you estimate causal effects from observational and A/B testing data using advanced statistical methods. You may also receive help from our **AI Assistant** in the dashboard.
     
     ### 1. Data Preparation
     **Simulated Data**: If you don't have a dataset, select "Simulated Data" to explore the app's features with a generated dataset.
