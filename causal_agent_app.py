@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+
 import pandas as pd
 import numpy as np
 import numpy as np
@@ -1857,8 +1857,7 @@ with tab_chat:
                 st.stop() # Wait for input
 
         # Configure API with the selected key
-        if active_key:
-            genai.configure(api_key=active_key)
+        # (Implicitly handled by passing active_key to utils)
             
         with st.chat_message("user"):
             st.markdown(st.session_state.messages[-1]["content"])
@@ -1880,7 +1879,8 @@ with tab_chat:
                     model_name=model_name,
                     messages=st.session_state.messages,
                     data_context=data_context, 
-                    app_context=app_context
+                    app_context=app_context,
+                    api_key=active_key
                 )
                 
                 for chunk in response_stream:
