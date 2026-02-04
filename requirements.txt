@@ -1,0 +1,17 @@
+streamlit
+dowhy
+econml
+pandas
+numpy
+scikit-learn
+matplotlib
+google-genai
+statsmodels
+
+# --- Metadata ---
+# Release: 3.0.0 | 2026-02-04 | Added Bayesian STS, restructured UI tabs, and cleaned up code repo.
+# Release: 2.0.0 | 2026-01-08 | Added AI Assistant (Chatbot), Quick Start Questions, and Updated User Guide.
+# Release: 1.2.0 | 2025-12-21 | Added Correlation Matrix, Placebo Treatment, and UI improvements.
+# Release: 1.1.0 | 2025-12-19 | Added methods for binary outcome.
+# Release: 1.0.0 | 2025-12-12 | Initial release with Causal Inference features.
+# Release: 0.9.0 | 2025-12-10| Beta release for internal testing.
