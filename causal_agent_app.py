@@ -20,9 +20,9 @@ import causal_utils
 import chatbot_utils
 import feedback_utils
 import importlib
-# importlib.reload(causal_utils)
-# importlib.reload(chatbot_utils)
-# importlib.reload(feedback_utils)
+importlib.reload(causal_utils)
+importlib.reload(chatbot_utils)
+importlib.reload(feedback_utils)
 from causal_utils import generate_script
 
 # --- 1. Data Simulation ---
@@ -38,6 +38,19 @@ if 'bucketing_ops' not in st.session_state:
     st.session_state.bucketing_ops = []
 if 'filtering_ops' not in st.session_state:
     st.session_state.filtering_ops = []
+
+# --- Preprocessing State Initialization ---
+if 'impute_enable' not in st.session_state: st.session_state.impute_enable = False
+if 'num_impute_method' not in st.session_state: st.session_state.num_impute_method = "Mean"
+if 'num_custom_val' not in st.session_state: st.session_state.num_custom_val = 0.0
+if 'cat_impute_method' not in st.session_state: st.session_state.cat_impute_method = "Mode"
+if 'cat_custom_val' not in st.session_state: st.session_state.cat_custom_val = "Missing"
+if 'winsorize_enable' not in st.session_state: st.session_state.winsorize_enable = False
+if 'winsorize_cols' not in st.session_state: st.session_state.winsorize_cols = []
+if 'percentile' not in st.session_state: st.session_state.percentile = 0.05
+if 'log_transform_cols' not in st.session_state: st.session_state.log_transform_cols = []
+if 'standardize_cols' not in st.session_state: st.session_state.standardize_cols = []
+
 
 @st.cache_data
 def simulate_data(n_samples=1000):
@@ -298,25 +311,29 @@ with tab_eda:
         
         # 1. Missing Value Imputation
         st.markdown("#### Missing Value Imputation")
-        impute_enable = st.checkbox("Enable Imputation", value=False)
+        impute_enable = st.checkbox("Enable Imputation", value=st.session_state.impute_enable, key="impute_enable")
         
         if impute_enable:
             col1, col2 = st.columns(2)
             with col1:
                 num_impute_method = st.selectbox(
                     "Numeric Imputation Method",
-                    ["Mean", "Median", "Zero", "Custom Value"]
+                    ["Mean", "Median", "Zero", "Custom Value"],
+                    index=["Mean", "Median", "Zero", "Custom Value"].index(st.session_state.num_impute_method),
+                    key="num_impute_method"
                 )
                 if num_impute_method == "Custom Value":
-                    num_custom_val = st.number_input("Custom Value (Numeric)", value=0.0)
+                    num_custom_val = st.number_input("Custom Value (Numeric)", value=st.session_state.num_custom_val, key="num_custom_val")
             
             with col2:
                 cat_impute_method = st.selectbox(
                     "Categorical Imputation Method",
-                    ["Mode", "Missing Indicator", "Custom Value"]
+                    ["Mode", "Missing Indicator", "Custom Value"],
+                    index=["Mode", "Missing Indicator", "Custom Value"].index(st.session_state.cat_impute_method),
+                    key="cat_impute_method"
                 )
                 if cat_impute_method == "Custom Value":
-                    cat_custom_val = st.text_input("Custom Value (Categorical)", value="Missing")
+                    cat_custom_val = st.text_input("Custom Value (Categorical)", value=st.session_state.cat_custom_val, key="cat_custom_val")
 
             # Apply Imputation
             # Numeric
@@ -347,14 +364,26 @@ with tab_eda:
 
         # 2. Winsorization
         st.markdown("#### Winsorization (Outlier Handling)")
-        winsorize_enable = st.checkbox("Enable Winsorization", value=False)
+        winsorize_enable = st.checkbox("Enable Winsorization", value=st.session_state.winsorize_enable, key="winsorize_enable")
         
         if winsorize_enable:
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-            winsorize_cols = st.multiselect("Select columns to winsorize", numeric_cols, default=[])
+            winsorize_cols = st.multiselect(
+                "Select columns to winsorize", 
+                numeric_cols, 
+                default=st.session_state.winsorize_cols,
+                key="winsorize_cols"
+            )
             
             if winsorize_cols:
-                percentile = st.slider("Percentile Threshold", min_value=0.01, max_value=0.25, value=0.05, step=0.01, help="Clips values at the p-th and (1-p)-th percentiles.")
+                percentile = st.slider(
+                    "Percentile Threshold", 
+                    min_value=0.01, max_value=0.25, 
+                    value=st.session_state.percentile, 
+                    step=0.01, 
+                    help="Clips values at the p-th and (1-p)-th percentiles.",
+                    key="percentile"
+                )
                 
                 for col in winsorize_cols:
                     lower = df[col].quantile(percentile)
@@ -366,7 +395,13 @@ with tab_eda:
         # 3. Log Transformation
         st.markdown("#### Log Transformation")
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        log_transform_cols = st.multiselect("Apply Log Transformation (np.log1p)", numeric_cols, help="Applies log(x+1) to selected columns.")
+        log_transform_cols = st.multiselect(
+            "Apply Log Transformation (np.log1p)", 
+            numeric_cols, 
+            default=st.session_state.log_transform_cols,
+            help="Applies log(x+1) to selected columns.",
+            key="log_transform_cols"
+        )
         
         if log_transform_cols:
             for col in log_transform_cols:
@@ -379,7 +414,13 @@ with tab_eda:
 
         # 4. Standardization
         st.markdown("#### Standardization")
-        standardize_cols = st.multiselect("Standardize Variables (StandardScaler)", numeric_cols, help="Scales variables to have mean=0 and std=1.")
+        standardize_cols = st.multiselect(
+            "Standardize Variables (StandardScaler)", 
+            numeric_cols, 
+            default=st.session_state.standardize_cols,
+            help="Scales variables to have mean=0 and std=1.",
+            key="standardize_cols"
+        )
         
         if standardize_cols:
             scaler = StandardScaler()
@@ -1703,6 +1744,18 @@ if st.session_state.get('analysis_run', False):
             # st.write(f"Debug: control_val={control_val if 'control_val' in locals() else 'Not Found'}")
             
             try:
+                # Prepare Preprocessing Params from State
+                p_impute_enable = st.session_state.get('impute_enable', False)
+                p_num_method = st.session_state.get('num_impute_method', "Mean")
+                p_num_val = st.session_state.get('num_custom_val', 0.0)
+                p_cat_method = st.session_state.get('cat_impute_method', "Mode")
+                p_cat_val = st.session_state.get('cat_custom_val', "Missing")
+                p_wins_enable = st.session_state.get('winsorize_enable', False)
+                p_wins_cols = st.session_state.get('winsorize_cols', [])
+                p_percentile = st.session_state.get('percentile', 0.05)
+                p_log_cols = st.session_state.get('log_transform_cols', [])
+                p_std_cols = st.session_state.get('standardize_cols', [])
+
                 # Prepare TS Params
                 ts_params = {
                     'enabled': enable_ts_analysis if 'enable_ts_analysis' in locals() else False,
@@ -1717,16 +1770,16 @@ if st.session_state.get('analysis_run', False):
                     confounders=confounders,
                     time_period=time_period,
                     estimation_method=estimation_method,
-                    impute_enable=impute_enable,
-                    num_impute_method=num_impute_method if impute_enable else None,
-                    num_custom_val=num_custom_val if impute_enable and num_impute_method == "Custom Value" else 0.0,
-                    cat_impute_method=cat_impute_method if impute_enable else None,
-                    cat_custom_val=cat_custom_val if impute_enable and cat_impute_method == "Custom Value" else "Missing",
-                    winsorize_enable=winsorize_enable,
-                    winsorize_cols=winsorize_cols if winsorize_enable else [],
-                    percentile=percentile if winsorize_enable else 0.05,
-                    log_transform_cols=log_transform_cols,
-                    standardize_cols=standardize_cols,
+                    impute_enable=p_impute_enable,
+                    num_impute_method=p_num_method if p_impute_enable else None,
+                    num_custom_val=p_num_val if p_impute_enable else 0.0,
+                    cat_impute_method=p_cat_method if p_impute_enable else None,
+                    cat_custom_val=p_cat_val if p_impute_enable else "Missing",
+                    winsorize_enable=p_wins_enable,
+                    winsorize_cols=p_wins_cols if p_wins_enable else [],
+                    percentile=p_percentile if p_wins_enable else 0.05,
+                    log_transform_cols=p_log_cols,
+                    standardize_cols=p_std_cols,
                     n_iterations=n_iterations,
                     control_val=control_val if 'control_val' in locals() else None,
                     treat_val=treat_val if 'treat_val' in locals() else None,
@@ -1736,6 +1789,7 @@ if st.session_state.get('analysis_run', False):
                     filtering_ops=st.session_state.filtering_ops,
                     ts_params=ts_params
                 )
+
             
                 st.download_button(
                     label="Download Python Script",
@@ -1963,25 +2017,36 @@ with tab_quasi:
         
         # Script Generation
         # Extract variables from state
+        p_impute_enable = st.session_state.get('impute_enable', False)
+        p_num_method = st.session_state.get('num_impute_method', "Mean")
+        p_num_val = st.session_state.get('num_custom_val', 0.0)
+        p_cat_method = st.session_state.get('cat_impute_method', "Mode")
+        p_cat_val = st.session_state.get('cat_custom_val', "Missing")
+        p_wins_enable = st.session_state.get('winsorize_enable', False)
+        p_wins_cols = st.session_state.get('winsorize_cols', [])
+        p_percentile = st.session_state.get('percentile', 0.05)
+        p_log_cols = st.session_state.get('log_transform_cols', [])
+        p_std_cols = st.session_state.get('standardize_cols', [])
+
         if quasi_method_run == "Difference-in-Differences (DiD)":
             p = st.session_state.did_params
-            script_quasi = causal_utils.generate_script(
+            script_quasi = generate_script(
                 data_source=data_source,
                 treatment=p['treatment'],
                 outcome=p['outcome'],
                 confounders=p['confounders'],
                 time_period=p['time'],
                 estimation_method=quasi_method_run,
-                impute_enable=impute_enable,
-                num_impute_method=num_impute_method if impute_enable else None,
-                num_custom_val=num_custom_val if impute_enable else None,
-                cat_impute_method=cat_impute_method if impute_enable else None,
-                cat_custom_val=cat_custom_val if impute_enable else None,
-                winsorize_enable=winsorize_enable,
-                winsorize_cols=winsorize_cols,
-                percentile=percentile,
-                log_transform_cols=log_transform_cols,
-                standardize_cols=standardize_cols,
+                impute_enable=p_impute_enable,
+                num_impute_method=p_num_method if p_impute_enable else None,
+                num_custom_val=p_num_val if p_impute_enable else None,
+                cat_impute_method=p_cat_method if p_impute_enable else None,
+                cat_custom_val=p_cat_val if p_impute_enable else None,
+                winsorize_enable=p_wins_enable,
+                winsorize_cols=p_wins_cols,
+                percentile=p_percentile,
+                log_transform_cols=p_log_cols,
+                standardize_cols=p_std_cols,
                 n_iterations=50,
                 use_logit=p['use_logit']
             )
@@ -1992,28 +2057,29 @@ with tab_quasi:
                 'intervention_date': str(p['intervention']),
                 'enabled': True
             }
-            script_quasi = causal_utils.generate_script(
+            script_quasi = generate_script(
                 data_source=data_source,
                 treatment=None,
                 outcome=p['outcome'],
                 confounders=[],
                 time_period=None,
                 estimation_method=quasi_method_run,
-                impute_enable=impute_enable,
-                num_impute_method=num_impute_method if impute_enable else None,
-                num_custom_val=num_custom_val if impute_enable else None,
-                cat_impute_method=cat_impute_method if impute_enable else None,
-                cat_custom_val=cat_custom_val if impute_enable else None,
-                winsorize_enable=winsorize_enable,
-                winsorize_cols=winsorize_cols,
-                percentile=percentile,
-                log_transform_cols=log_transform_cols,
-                standardize_cols=standardize_cols,
+                impute_enable=p_impute_enable,
+                num_impute_method=p_num_method if p_impute_enable else None,
+                num_custom_val=p_num_val if p_impute_enable else None,
+                cat_impute_method=p_cat_method if p_impute_enable else None,
+                cat_custom_val=p_cat_val if p_impute_enable else None,
+                winsorize_enable=p_wins_enable,
+                winsorize_cols=p_wins_cols,
+                percentile=p_percentile,
+                log_transform_cols=p_log_cols,
+                standardize_cols=p_std_cols,
                 n_iterations=50,
                 ts_params=ts_params_script,
                 unit_col=p['unit_col'],
                 treated_unit=p['treated_unit']
             )
+
             
         with col_ex2:
             st.download_button(

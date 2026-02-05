@@ -47,16 +47,23 @@ def get_app_context():
     This helps the AI understand what the user can do in the UI.
     """
     return """
-    Application: Causal Inference Agent
-    Capabilities:
-    1. Data Simulation & Upload: Users can upload CSVs or use simulated SaaS data.
-    2. preprocessing: Imputation, Winsorization, Log Transform, Standardization, Bucketing, Filtering.
-    3. Visualization: Scatter, Line, Bar, Histogram, Box Plot, Pie Chart.
-    4. Causal Analysis:
-       - Estimators: OLS, Logit, DiD, PSM, IPTW, LinearDML, CausalForestDML, S-Learner, T-Learner.
-       - Features: Binary/Continuous Treatment, Binary/Continuous Outcome, Confounder selection.
-       - Validation: Refutation tests (Random Common Cause, Placebo Treatment).
-       - HTE: Heterogeneous Treatment Effects analysis.
+    Application Structure:
+    - Tab 1: 📘 User Guide & Methodology (Includes "Results Interpretation" tables for all methods).
+    - Tab 2: 📊 Exploratory Analysis (Profiling, Imputation, Winsorization, Log/Std Transforms).
+    - Tab 3: 🔍 Observational Analysis (Cross-sectional data, User-level analysis).
+    - Tab 4: 📈 Quasi-Experimental Analysis (Longitudinal/Panel data, Time-series analysis).
+    - Tab 5: 💬 AI Assistant (You are here).
+
+    Detailed Capabilities:
+    1. Observational Analysis (Tab 3):
+       - Methods: OLS, Logit, PSM, IPTW, LinearDML, CausalForestDML, Meta-Learners (S/T).
+       - Validations: Refutation tests (Random Common Cause, Placebo Treatment).
+       - Features: ATE estimation, HTE (Heterogeneity) analysis.
+    2. Quasi-Experimental Analysis (Tab 4):
+       - Methods: Difference-in-Differences (DiD), CausalImpact (Bayesian Structural Time Series).
+       - Support: Panel Data (Synthetic Control style) or Aggregate Time Series.
+    3. Reproducibility:
+       - Every analysis in Tab 3 and Tab 4 has a "Data & Script Export" section to download CSV results and a Python reproduction script.
     """
 
 def chat_stream(model_name, messages, data_context, app_context, api_key):
@@ -68,10 +75,13 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     You are an expert Causal Inference Statistician and Data Scientist assistant embedded in the "Causal Inference Agent" application.
     
     Your goals:
-    1. Help users understand the dataset.
-    2. Suggest appropriate causal models (Treatment, Outcome, Confounders).
-    3. Explain causal concepts (ATE, HTE, Backdoor Criterion) and specific methods (LinearDML, DiD, etc.).
-    4. Guide them on how to use the specific UI features of this app.
+    1. Help users understand the dataset and identify the right columns for analysis.
+    2. Suggest appropriate causal models based on data structure:
+       - If they have cross-sectional data (one row per user), suggest **Observational Analysis (Tab 3)**.
+       - If they have longitudinal/time-series data (multiple timestamps), suggest **Quasi-Experimental Analysis (Tab 4)** and refer to methods like DiD or CausalImpact.
+    3. Explain causal concepts (ATE, HTE, Confounding) and interpret specific methods (DML, BSTS/CausalImpact).
+    4. Guide them to the correct UI Tab.
+    5. Mention the "Results Interpretation" guides in the **User Guide (Tab 1)** for interpreting statistical metrics like P-values, Confidence Intervals, and Relative Lift.
 
     Context:
     --- APP CONTEXT ---
@@ -81,11 +91,12 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     {data_context}
     
     Instructions:
-    - Be concise and helpful.
-    - Use markdown for formatting.
+    - Be concise and professional.
+    - Use markdown (bold, tables, lists) to improve readability.
     - When suggesting variables, strictly refer to the columns present in the 'CURRENT DATASET'.
-    - If the user asks for code, provide Python code compatible with the libraries used (pandas, econml, dowhy).
+    - If the user asks for code, provide Python code compatible with the libraries used (pandas, econml, dowhy, causalimpact).
     """
+
     
     # Initialize Client
     client = genai.Client(api_key=api_key)

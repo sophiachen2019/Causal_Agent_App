@@ -2,6 +2,8 @@
 
 A powerful, interactive web application for Causal Inference and Quasi-Experimental Analysis, designed to help data scientists and researchers identify causal relationships and estimate treatment effects with confidence.
 
+Try it out here: https://causalinferenceagent.streamlit.app/
+
 ## 🚀 Key Features
 
 - **Observational Analysis**: Implements robust causal estimation methods including OLS/Logit, Propensity Score Matching (PSM), Inverse Propensity Weighting (IPTW), Double Machine Learning (DML), and Meta-Learners (S/T-Learner).
