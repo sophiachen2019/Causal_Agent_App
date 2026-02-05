@@ -7,6 +7,7 @@ scikit-learn
 matplotlib
 google-genai
 statsmodels
+pycausalimpact
 
 # --- Metadata ---
 # Release: 3.0.0 | 2026-02-04 | Added Bayesian Structural Time Series(BSTS), restructured UI tabs, and created README.
