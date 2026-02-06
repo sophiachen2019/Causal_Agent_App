@@ -807,7 +807,7 @@ if st.session_state.get('analysis_run', False):
         
             # --- Step 1: Model ---
             st.subheader("1. Causal Model")
-            st.markdown("**Methodology:** Structural Causal Model (SCM)")
+            st.markdown("**Methodology:** Structural Causal Model (SCM) — *Pearl (2009)*")
             st.markdown("We define a Directed Acyclic Graph (DAG) $G = (V, E)$ where:")
             st.markdown(f"- $V$: Variables including Treatment (`{treatment}`), Outcome (`{outcome}`), and Confounders.")
             st.markdown("- $E$: Causal edges representing direct effects.")
@@ -849,7 +849,7 @@ if st.session_state.get('analysis_run', False):
 
             # --- Step 2: Identify ---
             st.subheader("2. Identification")
-            st.markdown("**Methodology:** Backdoor Criterion")
+            st.markdown("**Methodology:** Backdoor Criterion — *Pearl (2009)*")
             st.markdown("We aim to identify the causal effect $P(Y|do(T))$ from observational data $P(Y, T, X)$.")
             st.markdown("If a set of variables $X$ satisfies the Backdoor Criterion, we can use the **Adjustment Formula**:")
             st.latex(r"P(Y|do(T)) = \sum_X P(Y|T, X)P(X)")
@@ -864,7 +864,7 @@ if st.session_state.get('analysis_run', False):
                 use_logit = False # Initialize to avoid NameError in Refutation
                 estimate = None # Initialize to avoid UnboundLocalError
                 if estimation_method == "Linear Double Machine Learning (LinearDML)":
-                    st.markdown("#### Method: Double Machine Learning (DML)")
+                    st.markdown("#### Method: Double Machine Learning (DML) — *Chernozhukov et al. (2018)*")
                     st.markdown("DML removes the effect of confounders ($X$) from both treatment ($T$) and outcome ($Y$) using ML models.")
                 
                     st.markdown("**Step 1: Residualize Outcome**")
@@ -901,7 +901,7 @@ if st.session_state.get('analysis_run', False):
                         }
                     )
                 elif estimation_method == "Propensity Score Matching (PSM)":
-                    st.markdown("#### Method: Propensity Score Matching (PSM)")
+                    st.markdown("#### Method: Propensity Score Matching (PSM) — *Rosenbaum & Rubin (1983)*")
                     if is_binary_outcome:
                         st.caption("ℹ️ **Binary Outcome**: Estimate represents Risk Difference (Difference in Proportions).")
                     st.markdown("PSM matches treated units with control units that have similar probability of receiving treatment.")
@@ -921,7 +921,7 @@ if st.session_state.get('analysis_run', False):
                     )
 
                 elif estimation_method == "Inverse Propensity Weighting (IPTW)":
-                    st.markdown("#### Method: Inverse Propensity Weighting (IPTW)")
+                    st.markdown("#### Method: Inverse Propensity Weighting (IPTW) — *Austin (2011)*")
                     if is_binary_outcome:
                         st.caption("ℹ️ **Binary Outcome**: Estimate represents Risk Difference (Weighted Difference in Proportions).")
                     st.markdown("IPTW re-weights the data to create a pseudo-population where treatment is independent of confounders.")
@@ -942,7 +942,7 @@ if st.session_state.get('analysis_run', False):
 
                 elif "Meta-Learner" in estimation_method:
                     learner_type = estimation_method.split(": ")[1]
-                    st.markdown(f"#### Method: {learner_type}")
+                    st.markdown(f"#### Method: {learner_type} — *Künzel et al. (2019)*")
                 
                     if learner_type == "S-Learner":
                         st.markdown("S-Learner (Single Learner) treats treatment as a feature in a single ML model.")
@@ -979,7 +979,7 @@ if st.session_state.get('analysis_run', False):
                     )
 
                 elif estimation_method == "Generalized Random Forests (CausalForestDML)":
-                    st.markdown("#### Method: Generalized Random Forests (CausalForestDML)")
+                    st.markdown("#### Method: Generalized Random Forests (CausalForestDML) — *Wager & Athey (2018)*")
                     st.markdown("Causal Forests extend Random Forests to estimate heterogeneous treatment effects (CATE) using an honest splitting criterion.")
                     st.latex(r"\hat{\tau}(x) = \frac{\sum \alpha_i(x) (Y_i - \hat{m}(X_i)) (T_i - \hat{e}(X_i))}{\sum \alpha_i(x) (T_i - \hat{e}(X_i))^2}")
                 
@@ -1939,7 +1939,7 @@ with tab_quasi:
         
         if quasi_method_run == "Difference-in-Differences (DiD)":
             # --- Methodology and Formula ---
-            st.markdown("### 📖 Methodology: Difference-in-Differences")
+            st.markdown("### 📖 Methodology: Difference-in-Differences — *Angrist & Pischke (2009)*")
             st.markdown(r"""
             **Difference-in-Differences (DiD)** is a quasi-experimental design that uses longitudinal data from treatment and control groups to obtain an appropriate counterfactual to estimate a causal effect.
             
