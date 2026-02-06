@@ -1937,9 +1937,27 @@ with tab_quasi:
         results = st.session_state.quasi_results
         quasi_method_run = st.session_state.quasi_method_run
         
-        st.subheader(f"Results: {quasi_method_run}")
-        
         if quasi_method_run == "Difference-in-Differences (DiD)":
+            # --- Methodology and Formula ---
+            st.markdown("### 📖 Methodology: Difference-in-Differences")
+            st.markdown(r"""
+            **Difference-in-Differences (DiD)** is a quasi-experimental design that uses longitudinal data from treatment and control groups to obtain an appropriate counterfactual to estimate a causal effect.
+            
+            It compares the changes in outcomes over time between a population that is enrolled in a program (the intervention group) and a population that is not (the control group).
+            
+            **The Regression Model:**
+            """)
+            st.latex(r"Y = \beta_0 + \beta_1 T + \beta_2 Post + \beta_{DiD} (T \times Post) + \epsilon")
+            st.markdown(r"""
+            Where:
+            - $T$: Treatment indicator (1 if in treatment group, 0 otherwise).
+            - $Post$: Time indicator (1 if post-intervention, 0 if pre-intervention).
+            - $T \times Post$: The interaction term.
+            - $\beta_{DiD}$: The **Difference-in-Differences coefficient**, representing the causal effect.
+            """)
+            st.divider()
+
+            st.subheader(f"Results: {quasi_method_run}")
             # Metrics
             m1, m2, m3 = st.columns(3)
             m1.metric("Coefficient (Interaction)", f"{results['coefficient']:.4f}")
@@ -1954,6 +1972,28 @@ with tab_quasi:
                 st.text(results['summary'])
                 
         elif quasi_method_run == "CausalImpact (Bayesian Time Series)":
+            # --- Methodology and Formula ---
+            st.markdown("### 📖 Methodology: Bayesian Structural Time Series (BSTS)")
+            st.markdown(r"""
+            **CausalImpact** uses Bayesian Structural Time Series (BSTS) models to estimate the causal effect of an intervention. It constructs a counterfactual by predicting what would have happened to the treated unit had the intervention not occurred, using control units and historical trends.
+            
+            **The State-Space Model:**
+            """)
+            st.latex(r"y_t = Z_t^T \alpha_t + \epsilon_t \quad (\text{Observation Equation})")
+            st.latex(r"\alpha_{t+1} = T_t \alpha_t + R_t \eta_t \quad (\text{State Equation})")
+            st.markdown(r"""
+            Where:
+            - $y_t$: The observed outcome at time $t$.
+            - $\alpha_t$: The unobserved latent state (e.g., trend, seasonality, regression components).
+            - $Z_t, T_t, R_t$: System matrices that define the model structure.
+            - $\epsilon_t, \eta_t$: Gaussian noise terms.
+            
+            The **Causal Effect** at time $t$ is calculated as the difference between the observed value and the posterior predictive mean (the counterfactual):
+            """)
+            st.latex(r"\tau_t = y_t - E[y_t | \mathbf{y}_{1:T_{pre}}] \text{ for } t > T_{pre}")
+            st.divider()
+
+            st.subheader(f"Results: {quasi_method_run}")
             # Summary Metrics
             m1, m2, m3 = st.columns(3)
             
