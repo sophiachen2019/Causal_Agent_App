@@ -1658,14 +1658,18 @@ if st.session_state.get('analysis_run', False):
             if estimation_method == "Difference-in-Differences (DiD)" or (is_binary_outcome and use_logit):
                 st.warning("Refutation tests are not currently supported for this method/configuration (Manual Implementation).")
             else:
-                st.markdown("### Methodologies")
+                st.markdown("### 📖 Methodology: Robustness & Refutation — *Sharma & Kiciman (2020)*")
+                st.markdown("""
+                Robustness checks are essential to validate that the causal estimate is not a result of chance or model misspecification. 
+                We implement the refutation framework proposed by **Sharma & Kiciman (2020)** in the `DoWhy` library.
+                """)
                 
                 st.markdown("**1. Random Common Cause Test**")
                 st.markdown("We add a random variable $W_{random}$ as a common cause to the dataset. Since $W_{random}$ is independent of the true process, the new estimate should not change significantly.")
                 st.latex(r"ATE_{new} \approx ATE_{original}")
                 
-                st.markdown("**2. Placebo Treatment Refuter**")
-                st.markdown("We replace the true treatment variable $T$ with an independent random variable $T_{placebo}$. Since the placebo treatment is random, it should have no effect on the outcome.")
+                st.markdown("**2. Placebo Treatment Refuter — *Angrist & Pischke (2009)* **")
+                st.markdown("Based on the 'Placebo Test' framework popularized in econometrics by **Angrist & Pischke (2009)**, we replace the true treatment variable $T$ with an independent random variable $T_{placebo}$. Since the placebo treatment is random, it should have no effect on the outcome.")
                 st.latex(r"ATE_{placebo} \approx 0")
 
                 try:
