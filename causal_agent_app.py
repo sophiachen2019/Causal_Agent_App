@@ -1973,24 +1973,28 @@ with tab_quasi:
                 
         elif quasi_method_run == "CausalImpact (Bayesian Time Series)":
             # --- Methodology and Formula ---
-            st.markdown("### 📖 Methodology: Bayesian Structural Time Series (BSTS)")
             st.markdown(r"""
-            **CausalImpact** uses Bayesian Structural Time Series (BSTS) models to estimate the causal effect of an intervention. It constructs a counterfactual by predicting what would have happened to the treated unit had the intervention not occurred, using control units and historical trends.
+            **CausalImpact** is built on Bayesian Structural Time Series (BSTS) models, as detailed in **Scott and Varian (2014)**. It decomposes the time series into trend, seasonal, and regression components, using a state-space formulation to estimate the counterfactual.
             
-            **The State-Space Model:**
+            **The Observation Equation:**
             """)
-            st.latex(r"y_t = Z_t^T \alpha_t + \epsilon_t \quad (\text{Observation Equation})")
-            st.latex(r"\alpha_{t+1} = T_t \alpha_t + R_t \eta_t \quad (\text{State Equation})")
+            st.latex(r"y_t = \mu_t + \tau_t + \beta^T \mathbf{x}_t + \epsilon_t, \quad \epsilon_t \sim N(0, \sigma_\epsilon^2)")
+            
+            st.markdown(r"**The State Equations (Dynamics):**")
+            st.latex(r"\begin{aligned} \mu_t &= \mu_{t-1} + \delta_{t-1} + u_t, \quad &u_t \sim N(0, \sigma_u^2) \quad (\text{Trend}) \\ \delta_t &= \delta_{t-1} + v_t, \quad &v_t \sim N(0, \sigma_v^2) \quad (\text{Slope}) \\ \tau_t &= -\sum_{s=1}^{S-1} \tau_{t-s} + w_t, \quad &w_t \sim N(0, \sigma_w^2) \quad (\text{Seasonality}) \end{aligned}")
+            
             st.markdown(r"""
             Where:
-            - $y_t$: The observed outcome at time $t$.
-            - $\alpha_t$: The unobserved latent state (e.g., trend, seasonality, regression components).
-            - $Z_t, T_t, R_t$: System matrices that define the model structure.
-            - $\epsilon_t, \eta_t$: Gaussian noise terms.
-            
-            The **Causal Effect** at time $t$ is calculated as the difference between the observed value and the posterior predictive mean (the counterfactual):
+            - $y_t$: Observed outcome at time $t$.
+            - $\mu_t$: Level/Trend component.
+            - $\delta_t$: Slope of the trend (Local Linear Trend).
+            - $\tau_t$: Seasonal component with $S$ seasons.
+            - $\beta^T \mathbf{x}_t$: Regression component (external predictors).
+            - **Spike-and-Slab Prior**: Used for feature selection in $\beta$, allowing for sparse regression on large sets of control variables.
+
+            The **Causal Effect** $\tau_t$ (not to be confused with seasonal $\tau_t$) is the difference between observed and predicted counterfactual:
             """)
-            st.latex(r"\tau_t = y_t - E[y_t | \mathbf{y}_{1:T_{pre}}] \text{ for } t > T_{pre}")
+            st.latex(r"\text{Effect}_t = y_t - \hat{y}_t(0)")
             st.divider()
 
             st.subheader(f"Results: {quasi_method_run}")
