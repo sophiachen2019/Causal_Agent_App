@@ -52,7 +52,9 @@ if 'log_transform_cols' not in st.session_state: st.session_state.log_transform_
 if 'standardize_cols' not in st.session_state: st.session_state.standardize_cols = []
 
 
-@st.cache_data
+
+# Removing cache to fix stale data issues with Arrow
+# @st.cache_data
 def simulate_standard_data(n_samples=1000):
     np.random.seed(42)
     
@@ -88,7 +90,8 @@ def simulate_standard_data(n_samples=1000):
 
     # Date Generation (Simulating 2 years of data)
     start_date = pd.to_datetime('2023-01-01')
-    dates = start_date + pd.to_timedelta(np.random.randint(0, 730, n_samples), unit='D')
+    dates = start_date + pd.to_timedelta(np.random.randint(0, 730, n_samples).astype(int), unit='D')
+    dates = pd.to_datetime(dates).floor('D') # Ensure no fractional seconds
 
 
     # Outcome: Conversion (Binary)
@@ -115,10 +118,14 @@ def simulate_standard_data(n_samples=1000):
     df['Feature_Adoption'] = df['Feature_Adoption'].astype(int)
     df['Account_Value'] = df['Account_Value'].astype(float)
     df['Conversion'] = df['Conversion'].astype(int)
+    df['Date'] = pd.to_datetime(dates).floor('D') # Strict midnight
+    df['Date'] = df['Date'].dt.tz_localize(None) # Remove any timezone
+    df['Date'] = df['Date'].astype('datetime64[ns]') # Force ns for Arrow
     
     return df
 
-@st.cache_data
+
+# @st.cache_data
 def simulate_bsts_demo_data():
     """Generates multi-region time series data with a clear intervention for BSTS/Synthetic Control demo."""
     np.random.seed(42)
@@ -155,9 +162,7 @@ def simulate_bsts_demo_data():
             metric += lift
         
         region_df = pd.DataFrame({
-            'Date': date_range,
-            'Region': region,
-            'Daily_Revenue': metric,
+            'Date': pd.to_datetime(date_range).floor('D'), 'Region': region, 'Daily_Revenue': metric,
             'Marketing_Spend': np.random.normal(50, 5, total_days),
             'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
             'Is_Treated_Region': 1 if region == 'North' else 0
@@ -165,6 +170,7 @@ def simulate_bsts_demo_data():
         data_list.append(region_df)
     
     df = pd.concat(data_list, ignore_index=True)
+    df['Date'] = pd.to_datetime(df['Date']).dt.floor('D')
     return df
 
 def simulate_data(n_samples=1000, type="Standard"):
@@ -301,13 +307,20 @@ with tab_eda:
     
     if data_source == "Simulated Data":
         st.markdown("---")
-        simulate_type = st.selectbox("Simulation Type", ["Standard (Cross-sectional/DiD)", "BSTS Demo (Multi-region Time Series)"])
+        sim_options = ["Standard (Cross-sectional/DiD)", "BSTS Demo (Multi-region Time Series)"]
+        # Use session state to persist selection
+        if 'sim_type' not in st.session_state:
+            st.session_state.sim_type = "Standard"
+            
+        current_idx = 1 if st.session_state.sim_type == "BSTS Demo" else 0
+        simulate_type = st.selectbox("Simulation Type", sim_options, index=current_idx)
         
         # Check if we need to reset/re-simulate
         target_type = "Standard" if "Standard" in simulate_type else "BSTS Demo"
-        if 'sim_type' not in st.session_state or st.session_state.sim_type != target_type:
+        if st.session_state.sim_type != target_type:
             st.session_state.df = simulate_data(type=target_type)
             st.session_state.sim_type = target_type
+            st.session_state.raw_df = st.session_state.df.copy() # Also update raw_df
             st.session_state.bucketing_ops = []
             st.session_state.filtering_ops = []
             st.rerun()
@@ -315,7 +328,7 @@ with tab_eda:
     
     # Initialize Session State
     if 'df' not in st.session_state:
-        st.session_state.df = simulate_data()
+        st.session_state.df = simulate_data(type=st.session_state.get('sim_type', 'Standard'))
     
     if 'bucketing_ops' not in st.session_state:
         st.session_state.bucketing_ops = []
@@ -351,19 +364,19 @@ with tab_eda:
             # Fallback to simulated if no file, but don't overwrite if we had one before?
             # Actually, if no file is uploaded, we should probably show simulated or empty.
             if 'df' not in st.session_state:
-                 st.session_state.df = simulate_data()
+                 st.session_state.df = simulate_data(type=st.session_state.get('sim_type', 'Standard'))
             df = st.session_state.df
     else:
         # Simulated Data
         # If switching to simulated, we might want to reset if we were previously on Upload
         # For now, simplistic approach: if we don't have a df, simulate it.
         if 'df' not in st.session_state:
-             st.session_state.df = simulate_data()
+             st.session_state.df = simulate_data(type=st.session_state.get('sim_type', 'Standard'))
              st.session_state.raw_df = st.session_state.df.copy()
         
         # If the user explicitly wants to reset simulated data, we can add a button
         if st.button("Reset Simulated Data"):
-            st.session_state.df = simulate_data()
+            st.session_state.df = simulate_data(type=st.session_state.get('sim_type', 'Standard'))
             st.session_state.raw_df = st.session_state.df.copy()
             st.session_state.bucketing_ops = []
             st.session_state.filtering_ops = []
@@ -584,7 +597,7 @@ with tab_eda:
                     if 'raw_df' in st.session_state:
                          st.session_state.df = st.session_state.raw_df.copy()
                     else:
-                         st.session_state.df = simulate_data()
+                         st.session_state.df = simulate_data(type=st.session_state.get('sim_type', 'Standard'))
                          st.session_state.raw_df = st.session_state.df.copy()
                     
                     st.session_state.bucketing_ops = []
@@ -593,13 +606,17 @@ with tab_eda:
 
     # --- Data Preview ---
     st.subheader("3. Data Preview")
-    st.dataframe(df.head())
+    df_preview = df.head(10).copy()
+    for col in df_preview.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_preview[col]):
+            df_preview[col] = df_preview[col].dt.strftime('%Y-%m-%d')
+    st.dataframe(df_preview)
     
     # --- Data Summary ---
     st.subheader("4. Data Summary")
     with st.expander("Show Summary Statistics", expanded=False):
         st.markdown("**Descriptive Statistics**")
-        st.dataframe(df.describe())
+        st.dataframe(df.describe().astype(str))
         
         st.markdown("**Missing Values**")
         missing_info = pd.DataFrame({
@@ -617,6 +634,7 @@ with tab_eda:
             
             if corr_cols:
                 corr_matrix = df[corr_cols].corr()
+                # Use .format() but ensure it's a styled object that can be serialized or convert to string
                 st.dataframe(corr_matrix.style.background_gradient(cmap='coolwarm', axis=None).format("{:.2f}"))
             else:
                 st.info("Please select at least one variable.")
@@ -832,7 +850,7 @@ with tab_guide:
     | Method | Use Case | Input Data Structure & Instruction | Output & Results Interpretation |
     | :--- | :--- | :--- | :--- |
     | **Difference-in-Differences (DiD)** | Measuring impact when you have a **Control Group** and **Pre/Post Periods**. Assumes parallel trends. | **Structure**: Long format (one row per unit per time).<br>**Input**: Select `Treatment Col` (Group), `Outcome`, and `Time Period` (Pre/Post). | **Table**: View Interaction Coefficient.<br>**Interpretation**: A significant p-value (< 0.05) on the **Interaction Term** indicates a causal effect. The coefficient shows the absolute change in the outcome. |
-    | **CausalImpact (Bayesian STS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control) or simple pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**For Panel**: Check "Use Panel Data", select `Unit ID`, and choose the `Treated Unit` (others become controls). | **Metrics & Plots**: View Average/Cumulative effect.<br>**Interpretation**: Focus on **Relative Lift** (%) and the **95% Confidence Interval**. If the CI does not cross zero, the effect is statistically significant. |
+    | **CausalImpact (Bayesian STS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. Check "Run as Panel Data" to use other units as controls. | **Metrics & Plots**: View Average/Cumulative effect.<br>**Interpretation**: Focus on **Relative Lift** (%) and the **95% Confidence Interval**. If the CI does not cross zero, the effect is statistically significant. |
     
 
     ### 3. Export Data and Script
@@ -847,7 +865,7 @@ with tab_guide:
     
     ### 5. Version History
 
-    """)
+    """, unsafe_allow_html=True)
     
     if history:
         # Display Latest Version
@@ -1832,7 +1850,8 @@ if st.session_state.get('analysis_run', False):
                 ts_params = {
                     'enabled': enable_ts_analysis if 'enable_ts_analysis' in locals() else False,
                     'date_col': ts_date_col if 'ts_date_col' in locals() else None,
-                    'freq': ts_freq if 'ts_freq' in locals() else None
+                    'freq': ts_freq if 'ts_freq' in locals() else None,
+                    'is_bsts_demo': st.session_state.get('sim_type') == "BSTS Demo"
                 }
                 
                 script = generate_script(
@@ -1970,22 +1989,23 @@ with tab_quasi:
                 ci_intervention = None
 
         # --- Unit / Panel Support ---
-        use_panel_data = st.checkbox("Use Panel Data / Synthetic Control (Unit ID)", help="Enable this if your data has a Unit column (e.g. City, User) and you want to use other units as controls.")
-        ci_unit_col = None
-        ci_treated_unit = None
+        # --- Unit / Filter Configuration ---
+        st.markdown("##### Data Scope / Filtering")
+        col_p1, col_p2 = st.columns(2)
         
-        if use_panel_data:
-            st.markdown("##### Panel Data Configuration")
-            col_p1, col_p2 = st.columns(2)
-            with col_p1:
-                # Exclude Date and Outcome to reduce noise
-                candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
-                ci_unit_col = st.selectbox("Unit Identifier Column", candidates, index=get_index(candidates, "Region", 0), help="Column that identifies unique units/groups (e.g. 'City_Name').")
+        # Candidate columns for Unit ID
+        candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
+        ci_unit_col = st.selectbox("Unit Identifier Column (Optional)", ["None"] + candidates, index=get_index(["None"] + candidates, "Region", 0), help="Select if you want to filter for a specific unit OR run Panel Analysis.")
+        
+        ci_treated_unit = None
+        if ci_unit_col != "None":
+            unique_units = list(df[ci_unit_col].unique())
+            ci_treated_unit = st.selectbox("Select Target/Treated Unit", unique_units, index=get_index(unique_units, "North", 0), help="The specific unit/group to analyze.")
+        else:
+            ci_unit_col = None
             
-            with col_p2:
-                if ci_unit_col:
-                    unique_units = list(df[ci_unit_col].unique())
-                    ci_treated_unit = st.selectbox("Select Treated Unit", unique_units, index=get_index(unique_units, "North", 0), help="The unit that received the intervention. Other units will be used as Covariates (Controls).")
+        use_panel_data = st.checkbox("Run as Panel Data / Synthetic Control", value=True if ci_unit_col else False, help="If checked, uses other units as controls. If unchecked, performs simple time-series analysis on the Target Unit (or entire data).")
+
 
         if st.button("Run CausalImpact", type="primary"):
             if ci_intervention:
@@ -1993,7 +2013,8 @@ with tab_quasi:
                 with st.spinner("Aggregating Data & Running Bayesian Structural Time Series..."):
                     results = causal_utils.run_causal_impact_analysis(
                         df, ci_date_col, ci_outcome, ci_intervention, 
-                        unit_col=ci_unit_col, treated_unit=ci_treated_unit
+                        unit_col=ci_unit_col, treated_unit=ci_treated_unit,
+                        use_panel=use_panel_data
                     )
                     
                     if 'error' in results:
@@ -2008,7 +2029,8 @@ with tab_quasi:
                             'outcome': ci_outcome,
                             'intervention': ci_intervention,
                             'unit_col': ci_unit_col,
-                            'treated_unit': ci_treated_unit
+                            'treated_unit': ci_treated_unit,
+                            'use_panel': use_panel_data
                         }
                         st.success("Analysis Complete! Scroll down to see results.")
 
@@ -2180,7 +2202,9 @@ with tab_quasi:
             ts_params_script = {
                 'date_col': p['date_col'],
                 'intervention_date': str(p['intervention']),
-                'enabled': True
+                'enabled': True,
+                'use_panel': p.get('use_panel', False),
+                'is_bsts_demo': st.session_state.get('sim_type') == "BSTS Demo"
             }
             script_quasi = generate_script(
                 data_source=data_source,

@@ -39,7 +39,45 @@ from causalimpact import CausalImpact
 # --- 1. Load Data ---
 """
     if data_source == "Simulated Data":
-        script += """
+        if ts_params and ts_params.get('is_bsts_demo'):
+            script += """
+def simulate_bsts_demo_data():
+    \"\"\"Generates multi-region time series data for BSTS demo.\"\"\"
+    np.random.seed(42)
+    regions = ['North', 'South', 'East', 'West']
+    total_days = 400
+    start_date = pd.to_datetime('2023-01-01')
+    date_range = pd.date_range(start=start_date, periods=total_days)
+    data_list = []
+    
+    global_trend = np.linspace(100, 150, total_days)
+    weekly_seasonality = 10 * np.sin(2 * np.pi * np.arange(total_days) / 7)
+    monthly_seasonality = 20 * np.sin(2 * np.pi * np.arange(total_days) / 30)
+    
+    for region in regions:
+        regional_trend = global_trend + np.random.normal(0, 10)
+        noise = np.random.normal(0, 5, total_days)
+        metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
+        
+        intervention_day = 300
+        if region == 'North':
+            lift = np.zeros(total_days)
+            lift[intervention_day:] = 30 + np.cumsum(np.random.normal(0.5, 0.1, total_days - intervention_day))
+            metric += lift
+        
+        region_df = pd.DataFrame({
+            'Date': date_range, 'Region': region, 'Daily_Revenue': metric,
+            'Marketing_Spend': np.random.normal(50, 5, total_days),
+            'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
+            'Is_Treated_Region': 1 if region == 'North' else 0
+        })
+        data_list.append(region_df)
+    return pd.concat(data_list, ignore_index=True)
+
+df = simulate_bsts_demo_data()
+"""
+        else:
+            script += """
 def simulate_data(n_samples=1000):
     np.random.seed(42)
     customer_segment = np.random.binomial(1, 0.3, n_samples)
@@ -49,39 +87,21 @@ def simulate_data(n_samples=1000):
     prob_adoption = 1 / (1 + np.exp(-( -2 + 0.5 * customer_segment + 0.05 * historical_usage + 1.5 * marketing_nudge)))
     feature_adoption = np.random.binomial(1, prob_adoption, n_samples)
     account_value = (200 + 500 * feature_adoption + 1000 * customer_segment + 10 * historical_usage + 50 * quarter + np.random.normal(0, 50, n_samples))
-    
-    # Outcome: Conversion (Binary)
     prob_conversion = 1 / (1 + np.exp(-( -1 + 0.5 * customer_segment + 0.5 * feature_adoption)))
     conversion = np.random.binomial(1, prob_conversion, n_samples)
-
-    # Date
+    # Date Generation (Simulating 2 years of data)
     start_date = pd.to_datetime('2023-01-01')
-    dates = start_date + pd.to_timedelta(np.random.randint(0, 730, n_samples), unit='D')
-
-    df = pd.DataFrame({
-        'Customer_Segment': customer_segment,
-        'Historical_Usage': historical_usage,
-        'Marketing_Nudge': marketing_nudge,
-        'Quarter': quarter,
-        'Feature_Adoption': feature_adoption,
-        'Account_Value': account_value,
-        'Conversion': conversion,
-        'Date': dates
+    dates = start_date + pd.to_timedelta(np.random.randint(0, 730, n_samples).astype(int), unit='D')
+    return pd.DataFrame({
+        'Customer_Segment': customer_segment, 'Historical_Usage': historical_usage,
+        'Marketing_Nudge': marketing_nudge, 'Quarter': quarter,
+        'Feature_Adoption': feature_adoption, 'Account_Value': account_value,
+        'Conversion': conversion, 'Date': pd.to_datetime(dates).floor('D')
     })
 
-    # Enforce Data Types
-    df['Customer_Segment'] = df['Customer_Segment'].astype(int)
-    df['Historical_Usage'] = df['Historical_Usage'].astype(float)
-    df['Marketing_Nudge'] = df['Marketing_Nudge'].astype(int)
-    df['Quarter'] = df['Quarter'].astype(int)
-    df['Feature_Adoption'] = df['Feature_Adoption'].astype(int)
-    df['Account_Value'] = df['Account_Value'].astype(float)
-    df['Conversion'] = df['Conversion'].astype(int)
-    return df
-
 df = simulate_data()
-print("Data Simulated Successfully")
 """
+        script += "print('Data Simulated Successfully')\n"
     else:
         script += """
 # REPLACE 'your_dataset.csv' WITH THE PATH TO YOUR UPLOADED FILE
@@ -275,9 +295,11 @@ df[date_col] = pd.to_datetime(df[date_col])
 
 # --- Prepare Time Series Data ---
 """
+        use_panel = ts_params.get('use_panel', False)
         if unit_col and treated_unit:
-            script += f"""
-# Panel Data Mode
+            if use_panel:
+                script += f"""
+# Panel Data Mode (Synthetic Control)
 unit_col = '{unit_col}'
 treated_unit = '{treated_unit}'
 
@@ -293,21 +315,25 @@ if treated_unit not in df_pivot.columns:
 cols = [treated_unit] + [c for c in df_pivot.columns if c != treated_unit]
 df_final = df_pivot[cols]
 
-# 4. Clean column names (CausalImpact prefers string or simple names)
+# 4. Clean column names
 df_final.columns = [str(c) for c in df_final.columns]
-
-# 5. Fill Missing Values (Forward Fill commonly used in time series)
-df_final = df_final.ffill()
-
 ts_data = df_final
+"""
+            else:
+                script += f"""
+# Single Unit Filter Mode (Analyzing '{treated_unit}' only)
+df_unit = df[df['{unit_col}'] == '{treated_unit}']
+ts_data = df_unit.groupby(date_col)[outcome_col].mean().to_frame()
+ts_data = ts_data.sort_index()
 """
         else:
              script += f"""
-# Aggregate Data Mode (Simple Pre/Post)
-ts_data = df.groupby(date_col)[outcome_col].sum().to_frame() # Or mean, depending on metric
+# Aggregate Data Mode (All Units)
+ts_data = df.groupby(date_col)[outcome_col].mean().to_frame()
 ts_data = ts_data.sort_index()
-ts_data = ts_data.asfreq('D') # Ensure daily frequency
-ts_data = ts_data.ffill() # Handle missing dates
+"""
+        script += """
+ts_data = ts_data.asfreq('D').ffill()
 """
         
         script += """
@@ -647,7 +673,73 @@ model = CausalModel(
     script += "print(f'Average Treatment Effect (ATE): {estimate.value}')\n"
     script += "\n"
     
-    # ... (Refutation and Bootstrapping blocks - omitted for brevity in this update)
+    # --- 6. Refutation Tests ---
+    script += """
+# --- 6. Refutation Tests ---
+print("\\nRunning Refutation Tests...")
+
+def run_refutation(model, identified_estimand, estimate):
+    # 1. Random Common Cause
+    print("Test 1: Random Common Cause (Adding a random variable as a common cause)")
+    try:
+        refute_1 = model.refute_effect(identified_estimand, estimate, method_name="random_common_cause")
+        print(refute_1)
+        print("Sharma & Kiciman (2020) suggests that if the estimate changes significantly, the model may be misspecified.")
+    except Exception as e:
+        print(f"Random Common Cause Test Failed: {e}")
+
+    # 2. Placebo Treatment
+    print("\\nTest 2: Placebo Treatment (Replacing treatment with a random variable)")
+    try:
+        refute_2 = model.refute_effect(identified_estimand, estimate, method_name="placebo_treatment_refuter", placebo_type="permute")
+        print(refute_2)
+        print("Angrist & Pischke (2009) utilize placebo tests to verify that the effect disappears when the treatment is random.")
+    except Exception as e:
+        print(f"Placebo Treatment Test Failed: {e}")
+
+run_refutation(model, identified_estimand, estimate)
+"""
+
+    # --- 7. Bootstrapping (if enabled) ---
+    if n_iterations > 1:
+        script += f"""
+# --- 7. Bootstrapping for Confidence Intervals ---
+n_iterations = {n_iterations}
+print(f"\\nRunning {{n_iterations}} bootstrap iterations...")
+bootstrap_estimates = []
+
+for i in range(n_iterations):
+    # Resample with replacement
+    df_boot = df.sample(frac=1, replace=True, random_state=i)
+    
+    # Re-build and re-estimate
+    model_boot = CausalModel(
+        data=df_boot,
+        treatment=treatment,
+        outcome=outcome,
+        common_causes=confounders,
+        effect_modifiers=effect_modifiers
+    )
+    ident_boot = model_boot.identify_effect(proceed_when_unidentifiable=True)
+    est_boot = estimate_causal_effect(model_boot, ident_boot, test_significance=False)
+    
+    if est_boot and hasattr(est_boot, 'value'):
+        bootstrap_estimates.append(est_boot.value)
+
+if bootstrap_estimates:
+    bootstrap_estimates = np.array(bootstrap_estimates)
+    mean_ate = np.mean(bootstrap_estimates)
+    se_boot = np.std(bootstrap_estimates, ddof=1)
+    ci_lower = np.percentile(bootstrap_estimates, 2.5)
+    ci_upper = np.percentile(bootstrap_estimates, 97.5)
+    
+    print(f"Bootstrap Results (N={{n_iterations}}):")
+    print(f"  Mean ATE: {{mean_ate:.4f}}")
+    print(f"  Std Error: {{se_boot:.4f}}")
+    print(f"  95% CI: [{{ci_lower:.4f}}, {{ci_upper:.4f}}]")
+"""
+
+    script += "\nprint('\\nAnalysis Complete.')\n"
     return script
 
 def calculate_period_effect(df_period, treatment, outcome, confounders, estimation_method, is_binary_outcome=False):
@@ -824,27 +916,37 @@ def run_did_analysis(df, treatment_col, outcome_col, time_col, confounders, is_b
     except Exception as e:
         return {'error': str(e)}
 
-def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=None):
+def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=None, use_panel=False):
     """
     Aggregates user-level data into a daily time-series for CausalImpact.
-    If unit_col is provided (Panel Data), pivots so Treated Unit is Y and others are Covariates.
+    If use_panel is True (Synthetic Control), pivots so Treated Unit is Y and others are Covariates.
+    If use_panel is False but unit info is provided, filters for the treated unit.
     """
     df[date_col] = pd.to_datetime(df[date_col])
     
     if unit_col and treated_unit:
-        # --- Panel Data Mode (Synthetic Control style) ---
-        # 1. Pivot: Index=Date, Columns=Unit, Values=Outcome
-        df_pivot = df.pivot_table(index=date_col, columns=unit_col, values=outcome_col, aggfunc='sum')
-        
-        # 2. Validate Treated Unit exists
-        if treated_unit not in df_pivot.columns:
-            raise ValueError(f"Treated unit '{treated_unit}' not found in {unit_col} column.")
+        if use_panel:
+            # --- Panel Data Mode (Synthetic Control style) ---
+            # 1. Pivot: Index=Date, Columns=Unit, Values=Outcome
+            df_pivot = df.pivot_table(index=date_col, columns=unit_col, values=outcome_col, aggfunc='sum')
             
-        # 3. Structure: Y (Treated) | X1, X2... (Controls)
-        # Move Treated Unit to first column (CausalImpact requirement)
-        cols = [treated_unit] + [c for c in df_pivot.columns if c != treated_unit]
-        df_agg = df_pivot[cols]
-        
+            # 2. Validate Treated Unit exists
+            if treated_unit not in df_pivot.columns:
+                raise ValueError(f"Treated unit '{treated_unit}' not found in {unit_col} column.")
+                
+            # 3. Structure: Y (Treated) | X1, X2... (Controls)
+            # Move Treated Unit to first column (CausalImpact requirement)
+            cols = [treated_unit] + [c for c in df_pivot.columns if c != treated_unit]
+            df_agg = df_pivot[cols]
+        else:
+            # --- Single Unit Filter Mode ---
+            # User wants to analyze just one unit but without using others as controls
+            df_unit = df[df[unit_col] == treated_unit]
+            if df_unit.empty:
+                raise ValueError(f"No data found for unit '{treated_unit}' in column '{unit_col}'.")
+            df_agg = df_unit.groupby(date_col)[outcome_col].mean().sort_index()
+            df_agg = pd.DataFrame(df_agg)
+            
     else:
         # --- Standard Time Series Mode (Aggregation) ---
         # Sum outcome by date (appropriate for 'Sales', 'Conversions')
@@ -866,14 +968,14 @@ def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=N
     df_agg = df_agg.asfreq('D').ffill()
     return df_agg
 
-def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, unit_col=None, treated_unit=None):
+def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, unit_col=None, treated_unit=None, use_panel=False):
     """
     Runs CausalImpact analysis.
     df: User-level dataframe (will be aggregated) or Pre-aggregated.
     """
     try:
         # Aggregation
-        ts_data = prepare_time_series(df, date_col, outcome_col, unit_col, treated_unit)
+        ts_data = prepare_time_series(df, date_col, outcome_col, unit_col, treated_unit, use_panel)
         
         # Define Pre and Post
         intervention_date = pd.to_datetime(intervention_date)
