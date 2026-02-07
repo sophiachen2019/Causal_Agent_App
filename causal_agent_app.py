@@ -53,7 +53,7 @@ if 'standardize_cols' not in st.session_state: st.session_state.standardize_cols
 
 
 @st.cache_data
-def simulate_data(n_samples=1000):
+def simulate_standard_data(n_samples=1000):
     np.random.seed(42)
     
     # Confounders
@@ -117,6 +117,60 @@ def simulate_data(n_samples=1000):
     df['Conversion'] = df['Conversion'].astype(int)
     
     return df
+
+@st.cache_data
+def simulate_bsts_demo_data():
+    """Generates multi-region time series data with a clear intervention for BSTS/Synthetic Control demo."""
+    np.random.seed(42)
+    regions = ['North', 'South', 'East', 'West']
+    total_days = 400
+    start_date = pd.to_datetime('2023-01-01')
+    date_range = pd.date_range(start=start_date, periods=total_days)
+    
+    data_list = []
+    
+    # Shared Global Trend and Seasonality
+    global_trend = np.linspace(100, 150, total_days)
+    weekly_seasonality = 10 * np.sin(2 * np.pi * np.arange(total_days) / 7)
+    monthly_seasonality = 20 * np.sin(2 * np.pi * np.arange(total_days) / 30)
+    
+    for region in regions:
+        # Regional variation in trend
+        regional_offset = np.random.normal(0, 10)
+        regional_trend = global_trend + regional_offset
+        
+        # Noise
+        noise = np.random.normal(0, 5, total_days)
+        
+        # Base Metric (e.g. Daily Revenue)
+        metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
+        
+        # Intervention Effect (Only for North, starting at day 300)
+        intervention_day = 300
+        
+        if region == 'North':
+            # Add a cumulative lift starting from intervention_day
+            lift = np.zeros(total_days)
+            lift[intervention_day:] = 30 + np.cumsum(np.random.normal(0.5, 0.1, total_days - intervention_day))
+            metric += lift
+        
+        region_df = pd.DataFrame({
+            'Date': date_range,
+            'Region': region,
+            'Daily_Revenue': metric,
+            'Marketing_Spend': np.random.normal(50, 5, total_days),
+            'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
+            'Is_Treated_Region': 1 if region == 'North' else 0
+        })
+        data_list.append(region_df)
+    
+    df = pd.concat(data_list, ignore_index=True)
+    return df
+
+def simulate_data(n_samples=1000, type="Standard"):
+    if type == "BSTS Demo":
+        return simulate_bsts_demo_data()
+    return simulate_standard_data(n_samples)
 
 def convert_bool_to_int(df):
     # 1. Actual boolean types
@@ -244,6 +298,20 @@ with tab_eda:
     # --- Data Source ---
     st.subheader("1. Data Source")
     data_source = st.radio("Data Source", ["Simulated Data", "Upload CSV"], horizontal=True)
+    
+    if data_source == "Simulated Data":
+        st.markdown("---")
+        simulate_type = st.selectbox("Simulation Type", ["Standard (Cross-sectional/DiD)", "BSTS Demo (Multi-region Time Series)"])
+        
+        # Check if we need to reset/re-simulate
+        target_type = "Standard" if "Standard" in simulate_type else "BSTS Demo"
+        if 'sim_type' not in st.session_state or st.session_state.sim_type != target_type:
+            st.session_state.df = simulate_data(type=target_type)
+            st.session_state.sim_type = target_type
+            st.session_state.bucketing_ops = []
+            st.session_state.filtering_ops = []
+            st.rerun()
+        st.markdown("---")
     
     # Initialize Session State
     if 'df' not in st.session_state:
@@ -1872,14 +1940,23 @@ with tab_quasi:
         
         col_c1, col_c2 = st.columns(2)
         with col_c1:
-            ci_date_col = st.selectbox("Date Column", df.select_dtypes(include=['datetime', 'object']).columns, key="ci_date")
-            ci_outcome = st.selectbox("Outcome Column (to aggregate)", df.select_dtypes(include=[np.number]).columns, key="ci_y")
+            date_cols = df.select_dtypes(include=['datetime', 'object']).columns
+            ci_date_col = st.selectbox("Date Column", date_cols, index=get_index(date_cols, "Date", 0), key="ci_date")
+            
+            num_cols = df.select_dtypes(include=[np.number]).columns
+            ci_outcome = st.selectbox("Outcome Column (to aggregate)", num_cols, index=get_index(num_cols, "Daily_Revenue", 0), key="ci_y")
         with col_c2:
             # We need to know the range to offer a date picker
             try:
                 min_date = pd.to_datetime(df[ci_date_col]).min()
                 max_date = pd.to_datetime(df[ci_date_col]).max()
-                default_int = min_date + (max_date - min_date) / 2
+                
+                # Default intervention date
+                if 'Is_Treated_Region' in df.columns:
+                    # In simulation, intervention started at index 300 (Oct 28, 2023)
+                    default_int = pd.to_datetime('2023-10-28')
+                else:
+                    default_int = min_date + (max_date - min_date) / 2
                 
                 ci_intervention = st.date_input(
                     "Intervention Date (Start of Treatment)", 
@@ -1903,12 +1980,12 @@ with tab_quasi:
             with col_p1:
                 # Exclude Date and Outcome to reduce noise
                 candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
-                ci_unit_col = st.selectbox("Unit Identifier Column", candidates, help="Column that identifies unique units/groups (e.g. 'City_Name').")
+                ci_unit_col = st.selectbox("Unit Identifier Column", candidates, index=get_index(candidates, "Region", 0), help="Column that identifies unique units/groups (e.g. 'City_Name').")
             
             with col_p2:
                 if ci_unit_col:
-                    unique_units = df[ci_unit_col].unique()
-                    ci_treated_unit = st.selectbox("Select Treated Unit", unique_units, help="The unit that received the intervention. Other units will be used as Covariates (Controls).")
+                    unique_units = list(df[ci_unit_col].unique())
+                    ci_treated_unit = st.selectbox("Select Treated Unit", unique_units, index=get_index(unique_units, "North", 0), help="The unit that received the intervention. Other units will be used as Covariates (Controls).")
 
         if st.button("Run CausalImpact", type="primary"):
             if ci_intervention:
