@@ -615,8 +615,31 @@ with tab_eda:
     # --- Data Summary ---
     st.subheader("4. Data Summary")
     with st.expander("Show Summary Statistics", expanded=False):
-        st.markdown("**Descriptive Statistics**")
-        st.dataframe(df.describe().astype(str))
+        # Prepare data for summary (treat 0/1 as categorical)
+        df_summary = df.copy()
+        for col in df_summary.columns:
+            # Check if column has 2 unique values and they are 0/1 or True/False
+            unique_vals = df_summary[col].dropna().unique()
+            if len(unique_vals) <= 2:
+                # Check if values are boolean-like (0, 1, True, False)
+                is_binary = all(val in [0, 1, True, False] for val in unique_vals)
+                if is_binary:
+                     df_summary[col] = df_summary[col].astype(str)
+
+        st.markdown("**Numeric Statistics**")
+        st.dataframe(df_summary.describe().astype(str))
+        
+        st.markdown("**Categorical Statistics**")
+        cat_cols = df_summary.select_dtypes(include=['object', 'category']).columns
+        if len(cat_cols) > 0:
+            for col in cat_cols:
+                st.markdown(f"**{col}**")
+                counts = df_summary[col].value_counts()
+                percent = df_summary[col].value_counts(normalize=True) * 100
+                summary_df = pd.DataFrame({'Count': counts, 'Percentage': percent})
+                st.dataframe(summary_df.style.format({'Percentage': '{:.2f}%'}))
+        else:
+            st.info("No categorical variables found.")
         
         st.markdown("**Missing Values**")
         missing_info = pd.DataFrame({
@@ -644,84 +667,229 @@ with tab_eda:
     # --- Chart Builder ---
     st.subheader("5. Visualization (Chart Builder)")
     
+    # Pivot Feature Removed per user request
+    df_plot_source = df
+
+    st.markdown("#### Chart Configuration")
     chart_type = st.selectbox("Chart Type", ["Scatter Plot", "Line Chart", "Bar Chart", "Histogram", "Box Plot", "Pie Chart"])
     
     col_x, col_y, col_color = st.columns(3)
     
     with col_x:
-        x_var = st.selectbox("X Variable", df.columns)
+        x_var = st.selectbox("X Variable", df_plot_source.columns)
     
-    with col_y:
-        # Y variable is optional for some charts
-        if chart_type in ["Histogram", "Pie Chart"]:
-            y_var = None
-        else:
-            y_var = st.selectbox("Y Variable", df.columns, index=1 if len(df.columns) > 1 else 0)
-            
-    with col_color:
-        color_var = st.selectbox("Color/Group (Optional)", [None] + list(df.columns))
+    # Initialize variables
+    y_vars = None
+    right_y_vars = []
+    use_dual_axis = False
 
-    # Aggregation Options
-    enable_aggregation = st.checkbox("Aggregate Data")
-    if enable_aggregation:
-        agg_method = st.selectbox("Aggregation Method", ["Mean", "Sum", "Count", "Median", "Min", "Max"])
-        
-        if y_var:
-            try:
-                if color_var:
-                    df_plot = df.groupby([x_var, color_var])[y_var].agg(agg_method.lower()).reset_index()
-                else:
-                    df_plot = df.groupby(x_var)[y_var].agg(agg_method.lower()).reset_index()
+    with col_y:
+        # Y variable selection (support multiple)
+        if chart_type in ["Histogram", "Pie Chart"]:
+            y_vars = None
+            st.markdown("*N/A for this chart type*")
+        else:
+            # Multi-select for Y variables
+            # Default to first non-X numeric column if possible
+            numeric_cols = df_plot_source.select_dtypes(include=[np.number]).columns.tolist()
+            default_y = [c for c in numeric_cols if c != x_var][:1]
+            if not default_y and len(df_plot_source.columns) > 1:
+                default_y = [df_plot_source.columns[1]]
                 
-                st.info(f"Plotting {agg_method} of {y_var} by {x_var}")
+            y_vars = st.multiselect("Y Variable(s)", df_plot_source.columns, default=default_y)
+            
+            # Application of Dual Axis Logic
+            if chart_type in ["Line Chart", "Bar Chart"] and y_vars and len(y_vars) > 1:
+                 use_dual_axis = st.checkbox("Enable Dual Axis (Right Y-Axis)", value=False)
+                 if use_dual_axis:
+                     right_y_vars = st.multiselect("Select Variables for Right Axis", y_vars)
+
+    with col_color:
+        # Color only available if Single Y variable is selected OR if Dual Axis is NOT used (simplification)
+        if y_vars and len(y_vars) > 1:
+            st.markdown("*Disabled when multiple Y variables are selected*")
+            color_var = None
+        else:
+            options = [None] + list(df_plot_source.columns)
+            color_var = st.selectbox("Color/Group (Optional)", options)
+
+    # --- Facet Options ---
+    col_fc1, col_fc2 = st.columns([3, 1])
+    with col_fc1:
+        facet_col = st.selectbox("Split Charts By (Facet)", [None] + list(df_plot_source.columns), key="facet_selector")
+    with col_fc2:
+        st.markdown("###") # Spacer
+        if st.button("Reset Facet"):
+            st.session_state['facet_selector'] = None
+            st.rerun()
+
+    # Aggregation Options (Only if NOT using Pivot, as Pivot already aggregates)
+    enable_aggregation = st.checkbox("Aggregate Data", key="agg_std")
+    if enable_aggregation:
+        agg_method = st.selectbox("Aggregation Method", ["Mean", "Sum", "Count", "Median", "Min", "Max"], key="agg_meth_std")
+        
+        if y_vars:
+            try:
+                # Group by X and Color (if exists) AND Facet (if exists)
+                groups = [x_var]
+                if color_var:
+                    groups.append(color_var)
+                if facet_col:
+                    groups.append(facet_col)
+                    
+                # Aggegate all selected Ys
+                # Note: We need to include facet_col in groupby to keep it for splitting later
+                df_plot = df_plot_source.groupby(groups)[y_vars].agg(agg_method.lower()).reset_index()
+                st.info(f"Plotting {agg_method} of {', '.join(y_vars)}")
             except Exception as e:
                 st.error(f"Aggregation failed: {e}")
-                df_plot = df
+                df_plot = df_plot_source
         else:
-             # For Histogram/Pie where Y might not be needed or is count
-             st.warning("Aggregation is mostly relevant when a Y variable is selected (e.g., Bar/Line charts).")
-             df_plot = df
+             st.warning("Aggregation requires Y variables.")
+             df_plot = df_plot_source
     else:
-        df_plot = df
+        df_plot = df_plot_source
 
-    if chart_type == "Scatter Plot":
-        st.scatter_chart(df_plot, x=x_var, y=y_var, color=color_var)
-    elif chart_type == "Line Chart":
-        st.line_chart(df_plot, x=x_var, y=y_var, color=color_var)
-    elif chart_type == "Bar Chart":
-        st.bar_chart(df_plot, x=x_var, y=y_var, color=color_var)
-    elif chart_type == "Histogram":
-        fig, ax = plt.subplots()
-        if color_var:
-            for label, group in df_plot.groupby(color_var):
-                ax.hist(group[x_var], alpha=0.5, label=str(label), bins=20)
-            ax.legend()
-        else:
-            ax.hist(df_plot[x_var], bins=20)
-        ax.set_title(f"Histogram of {x_var}")
-        st.pyplot(fig)
-    elif chart_type == "Box Plot":
-        fig, ax = plt.subplots()
-        if color_var:
-            # Boxplot with grouping
-            data = []
-            labels = []
-            for label, group in df_plot.groupby(color_var):
-                data.append(group[x_var] if y_var is None else group[y_var])
-                labels.append(label)
-            ax.boxplot(data, labels=labels)
-        else:
-            ax.boxplot(df_plot[x_var] if y_var is None else df_plot[y_var])
-        st.pyplot(fig)
-    elif chart_type == "Pie Chart":
-        fig, ax = plt.subplots()
-        if color_var:
-             counts = df_plot[color_var].value_counts()
-             ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
-        else:
-             counts = df_plot[x_var].value_counts()
-             ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
-        st.pyplot(fig)
+    # --- Plotting Loop (Facet Support) ---
+    
+    # Define plotting function to reuse
+    def plot_chart(data, x, y, color, title_suffix=""):
+        # Fix for continuous color scale on binary/categorical variables
+        # If the color variable has few unique values, treat it as categorical (string)
+        # This prevents Streamlit/Altair from using a continuous gradient for 0/1 variables.
+        if color and color in data.columns:
+            unique_count = data[color].nunique()
+            # Threshold of 10 should cover most categorical use cases like Region, Segment, etc.
+            # Binary variables (2 values) will definitely be caught here.
+            if unique_count <= 10 or data[color].dtype == 'object' or data[color].dtype.name == 'category':
+                 data = data.copy()
+                 data[color] = data[color].astype(str)
+
+        # Dual Axis Plotting (Matplotlib)
+        if use_dual_axis and y and len(y) > 1:
+            # Check for duplicates in X and aggregate if needed for line plot
+            if data[x].duplicated().any():
+                st.warning(f"Data contains duplicate values for X-axis ({x}). Aggregating by mean for Dual Axis chart.")
+                # Select only numeric columns + X for aggregation to avoid errors
+                numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
+                cols_to_agg = list(set(numeric_cols + y)) 
+                # Ensure X is preserved if it's not the index
+                if x in data.columns:
+                     data_sorted = data.groupby(x)[cols_to_agg].mean().reset_index()
+                else: 
+                     # If X is index
+                     data_sorted = data.groupby(level=0)[cols_to_agg].mean().reset_index()
+            else:
+                data_sorted = data.sort_values(by=x)
+
+            fig, ax1 = plt.subplots(figsize=(10, 6))
+            
+            # Identify Left vs Right vars
+            left_vars = [v for v in y if v not in right_y_vars]
+            right_vars = [v for v in y if v in right_y_vars]
+            
+            # Plot Left Axis
+            if left_vars:
+                # Use a color cycle or distinct colors
+                colors = plt.cm.tab10(np.linspace(0, 1, len(left_vars) + len(right_vars)))
+                
+                for i, col in enumerate(left_vars):
+                    ax1.plot(data_sorted[x], data_sorted[col], label=f"{col} (Left)", marker='o', color=colors[i])
+            
+            ax1.set_xlabel(x)
+            ax1.set_ylabel(", ".join(left_vars))
+            ax1.tick_params(axis='y')
+            # Combine legends later or put separately
+            lines1, labels1 = ax1.get_legend_handles_labels()
+
+            # Plot Right Axis
+            lines2, labels2 = [], []
+            if right_vars:
+                ax2 = ax1.twinx()
+                for i, col in enumerate(right_vars):
+                     # Offset color index
+                     color_idx = len(left_vars) + i
+                     if color_idx >= len(colors): color_idx = i % len(colors)
+                     
+                     ax2.plot(data_sorted[x], data_sorted[col], label=f"{col} (Right)", linestyle='--', alpha=0.7, color=colors[color_idx])
+                
+                ax2.set_ylabel(", ".join(right_vars))
+                ax2.tick_params(axis='y')
+                lines2, labels2 = ax2.get_legend_handles_labels()
+            
+            # Unified Legend
+            ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+            
+            plt.title(f"Dual Axis Chart {title_suffix}")
+            st.pyplot(fig)
+            return
+
+        if chart_type == "Scatter Plot":
+            st.scatter_chart(data, x=x, y=y, color=color)
+        elif chart_type == "Line Chart":
+            st.line_chart(data, x=x, y=y, color=color)
+        elif chart_type == "Bar Chart":
+            st.bar_chart(data, x=x, y=y, color=color)
+        elif chart_type == "Histogram":
+            fig, ax = plt.subplots()
+            if color:
+                for label, group in data.groupby(color):
+                    ax.hist(group[x], alpha=0.5, label=str(label), bins=20)
+                ax.legend()
+            else:
+                ax.hist(data[x], bins=20)
+            ax.set_title(f"Histogram of {x} {title_suffix}")
+            st.pyplot(fig)
+        elif chart_type == "Box Plot":
+            fig, ax = plt.subplots()
+            if color:
+                # Boxplot with grouping
+                box_data = []
+                labels = []
+                for label, group in data.groupby(color):
+                    if y:
+                         # Use first Y for boxplot if multiple?
+                         box_data.append(group[y[0]])
+                    else:
+                         box_data.append(group[x]) 
+                    labels.append(label)
+                ax.boxplot(box_data, labels=labels)
+            else:
+                if y:
+                     # Multiple boxplots for multiple Ys
+                     box_data = [data[col] for col in y]
+                     ax.boxplot(box_data, labels=y)
+                else:
+                    ax.boxplot(data[x])
+            ax.set_title(f"Box Plot {title_suffix}")
+            st.pyplot(fig)
+        elif chart_type == "Pie Chart":
+            fig, ax = plt.subplots()
+            if color:
+                 counts = data[color].value_counts()
+                 ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
+            else:
+                 counts = data[x].value_counts()
+                 ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
+            ax.set_title(f"Pie Chart {title_suffix}")
+            st.pyplot(fig)
+
+    if facet_col:
+        # Get unique values and sort
+        unique_facets = sorted(df_plot[facet_col].unique())
+        st.write(f"Displaying {len(unique_facets)} charts for: **{facet_col}**")
+        
+        for facet_val in unique_facets:
+            st.markdown(f"#### {facet_col}: {facet_val}")
+            # Filter data
+            df_facet = df_plot[df_plot[facet_col] == facet_val]
+            if len(df_facet) > 0:
+                plot_chart(df_facet, x_var, y_vars, color_var, title_suffix=f"({facet_val})")
+            else:
+                st.warning(f"No data for {facet_val}")
+    else:
+        # Single Chart
+        plot_chart(df_plot, x_var, y_vars, color_var)
 
 
 # ==========================================
@@ -830,6 +998,16 @@ with tab_guide:
         - **Chart Builder**: Create custom visualizations with **Aggregation** (Mean, Sum, Count, Median, Min, Max).
 
     ### 2. Step-by-Step Causal Analysis
+    **Observational Analysis**:
+    - **Methods**: OLS, Propensity Score Matching, IP Weighting, Double Machine Learning (DML), and Meta-Learners.
+    - **Refutation**: Automatically tests the robustness of your results (Random Common Cause, Placebo Treatment, Data Subset).
+
+    **Quasi-Experimental Analysis**:
+    - **Difference-in-Differences (DiD)**: Compare the change in outcome for a treatment group vs a control group in pre/post periods.
+    - **CausalImpact (BSTS)**: specific for Time Series. 
+        - Predicts the counterfactual using a Bayesian Structural Time Series model.
+        - **Control Variables**: Select external predictors (Covariates) like "Marketing Spend" to improve model accuracy.
+        - **Synthetic Control**: Run as "Panel Data" to use other units as controls.
     The application is divided into two main analysis modules:
 
     #### A. Observational Analysis
@@ -2007,6 +2185,13 @@ with tab_quasi:
         use_panel_data = st.checkbox("Run as Panel Data / Synthetic Control", value=True if ci_unit_col else False, help="If checked, uses other units as controls. If unchecked, performs simple time-series analysis on the Target Unit (or entire data).")
 
 
+        if st.session_state.get('sim_type') == 'BSTS Demo':
+             candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
+        else:
+             candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome, ci_unit_col] if pd.api.types.is_numeric_dtype(df[c])]
+
+        ci_covariates = st.multiselect("Control Variables (Covariates)", candidates, help="Select additional variables (e.g. Marketing Spend, Weather) to help the model predict the counterfactual.")
+
         if st.button("Run CausalImpact", type="primary"):
             if ci_intervention:
                 st.write("---")
@@ -2014,7 +2199,8 @@ with tab_quasi:
                     results = causal_utils.run_causal_impact_analysis(
                         df, ci_date_col, ci_outcome, ci_intervention, 
                         unit_col=ci_unit_col, treated_unit=ci_treated_unit,
-                        use_panel=use_panel_data
+                        use_panel=use_panel_data,
+                        covariates=ci_covariates
                     )
                     
                     if 'error' in results:

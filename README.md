@@ -42,9 +42,9 @@ streamlit run causal_agent_app.py
 
 Navigate through the tabs:
 1. **📘 User Guide**: Learn about the methodologies and how to interpret results.
-2. **📊 Exploratory Analysis**: Profile your data and perform transformations.
+2. **📊 Exploratory Analysis**: Profile your data, perform transformations and visualizations.
 3. **🔍 Observational Analysis**: Run cross-sectional causal models with refutation tests.
-4. **📈 Quasi-Experimental Analysis**: Analyze impact over time with DiD or CausalImpact.
+4. **📈 Quasi-Experimental Analysis**: Analyze impact over time with DiD or BSTS.
 5. **💬 AI Assistant**: Chat with the agent for expert advice.
 
 ## 📁 Project Structure

@@ -10,6 +10,7 @@ statsmodels
 pycausalimpact
 
 # --- Metadata ---
+# Release: 3.2.0 | 2026-02-11 | Refined data summary and chart builder features; Enabled covariates for BSTS.
 # Release: 3.1.0 | 2026-02-06 | Added methodology references and simulated data for BSTS.
 # Release: 3.0.0 | 2026-02-04 | Added Bayesian Structural Time Series(BSTS), restructured UI tabs, and created README.
 # Release: 2.0.0 | 2026-01-08 | Added AI Assistant (Chatbot), updated User Guide, and built a feedback module.

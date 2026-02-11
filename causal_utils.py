@@ -916,18 +916,20 @@ def run_did_analysis(df, treatment_col, outcome_col, time_col, confounders, is_b
     except Exception as e:
         return {'error': str(e)}
 
-def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=None, use_panel=False):
+def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=None, use_panel=False, covariates=None):
     """
     Aggregates user-level data into a daily time-series for CausalImpact.
     If use_panel is True (Synthetic Control), pivots so Treated Unit is Y and others are Covariates.
     If use_panel is False but unit info is provided, filters for the treated unit.
+    If covariates are provided (e.g. Marketing Spend), they are aggregated and added as predictors.
     """
     df[date_col] = pd.to_datetime(df[date_col])
     
+    # Base Data Selection
     if unit_col and treated_unit:
         if use_panel:
             # --- Panel Data Mode (Synthetic Control style) ---
-            # 1. Pivot: Index=Date, Columns=Unit, Values=Outcome
+            # 1. Pivot Outcome: Index=Date, Columns=Unit, Values=Outcome
             df_pivot = df.pivot_table(index=date_col, columns=unit_col, values=outcome_col, aggfunc='sum')
             
             # 2. Validate Treated Unit exists
@@ -938,44 +940,54 @@ def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=N
             # Move Treated Unit to first column (CausalImpact requirement)
             cols = [treated_unit] + [c for c in df_pivot.columns if c != treated_unit]
             df_agg = df_pivot[cols]
+            
+            # 4. Add Covariates (Specific to Treated Unit)
+            # If covariates are provided, we likely want the Treated Unit's values for them
+            if covariates:
+                df_treated = df[df[unit_col] == treated_unit].copy()
+                # Aggregate covariates by date (mean usually safe for continuous)
+                df_covs = df_treated.groupby(date_col)[covariates].mean()
+                # Join with Panel Data
+                df_agg = df_agg.join(df_covs, how='left')
+                
         else:
             # --- Single Unit Filter Mode ---
             # User wants to analyze just one unit but without using others as controls
             df_unit = df[df[unit_col] == treated_unit]
             if df_unit.empty:
                 raise ValueError(f"No data found for unit '{treated_unit}' in column '{unit_col}'.")
-            df_agg = df_unit.groupby(date_col)[outcome_col].mean().sort_index()
-            df_agg = pd.DataFrame(df_agg)
+            
+            cols_to_agg = [outcome_col]
+            if covariates:
+                cols_to_agg += covariates
+                
+            df_agg = df_unit.groupby(date_col)[cols_to_agg].mean().sort_index()
+            # Ensure Outcome is first column
+            df_agg = df_agg[[outcome_col] + (covariates if covariates else [])]
             
     else:
         # --- Standard Time Series Mode (Aggregation) ---
-        # Sum outcome by date (appropriate for 'Sales', 'Conversions')
-        # If outcome is a rate (e.g. 'Conversion Rate'), Mean might be better, but CausalImpact usually expects counts/volumes or continuous.
-        # We will Default to Mean for rates/averages and Sum for counts? 
-        # For now, let's use MEAN as it normalizes for sample size changes, unless it's a count variable.
-        # Let's infer: if outcome is 0/1, Mean = Rate. If outcome is huge, Mean = Avg Value.
-        
-        # Actually, for Business KPIs, Sum is often desired (Total Revenue).
-        # Let's provide both or pick a safe default. 
-        # Given the simulated data 'Account_Value' (continuous) and 'Conversion' (binary), 
-        # Mean accounts for fluctuating daily active users.
-        
-        df_agg = df.groupby(date_col)[outcome_col].mean().sort_index()
-        # Ensure it's a DataFrame
-        df_agg = pd.DataFrame(df_agg)
+        cols_to_agg = [outcome_col]
+        if covariates:
+            cols_to_agg += covariates
+            
+        df_agg = df.groupby(date_col)[cols_to_agg].mean().sort_index()
+        # Ensure Outcome is first column
+        df_agg = df_agg[[outcome_col] + (covariates if covariates else [])]
         
     # Fill missing dates?
+    df_agg = pd.DataFrame(df_agg)
     df_agg = df_agg.asfreq('D').ffill()
     return df_agg
 
-def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, unit_col=None, treated_unit=None, use_panel=False):
+def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, unit_col=None, treated_unit=None, use_panel=False, covariates=None):
     """
     Runs CausalImpact analysis.
     df: User-level dataframe (will be aggregated) or Pre-aggregated.
     """
     try:
         # Aggregation
-        ts_data = prepare_time_series(df, date_col, outcome_col, unit_col, treated_unit, use_panel)
+        ts_data = prepare_time_series(df, date_col, outcome_col, unit_col, treated_unit, use_panel, covariates)
         
         # Define Pre and Post
         intervention_date = pd.to_datetime(intervention_date)
@@ -994,33 +1006,8 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
         pre_period = [pd.to_datetime(min_date), pd.to_datetime(intervention_date) - pd.Timedelta(days=1)]
         post_period = [pd.to_datetime(intervention_date), pd.to_datetime(max_date)]
         
-        # CausalImpact expects list or strings for periods? 
-        # pycausalimpact handles pandas inputs well.
-        
-        # NOTE: CausalImpact usually needs Control Series (Unnafected features).
-        # We don't have them in the simple selection. 
-        # We can pass *Just* the outcome, and it uses structural Time Series (Local Level) to predict counterfactual.
-        
-        # CausalImpact Implementation Note:
-        # The 'KeyError: 0' often happens if the input is a DataFrame with DatetimeIndex but the library tries to access it like an array.
-        # We can try to reset the index and pass it, but CausalImpact relies on the index.
-        # The error `mu_sig = (mu[0], sig[0])` implies `mu` is a Series where 0 is not in the index.
-        # This suggests `mu` has a DatetimeIndex.
-        # Solution: Ensure we pass standard periods.
-        
-        # Another fix: Pass the data component as values if indexing issue persists, but we lose Date plotting.
-        # Better: Ensure the pre_period indices are valid.
-        
-        # Let's try converting the input to values only if it fails, or ensuring strict list periods.
-        # The library seems to prefer strings for periods when using DatetimeIndex?
-        # pre_period = [str(min_date), str(intervention_date - pd.Timedelta(days=1))]
-        
-        # Let's try passing the values directly and handle plotting separately if needed?
-        # A common fix for `KeyError: 0` in CausalImpact is ensuring `standardize` logic works.
-        # Let's just catch it and retry with numerical index?
-        
         try:
-             ci = CausalImpact(ts_data, pre_period, post_period)
+            ci = CausalImpact(ts_data, pre_period, post_period)
         except KeyError:
              # Fallback: Reset index to integer range, keep dates for reference
              ts_data_reset = ts_data.reset_index(drop=True)
@@ -1036,7 +1023,9 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
              loc_idx = ts_data.index.get_loc(intervention_date)
              if isinstance(loc_idx, slice):
                  loc_idx = loc_idx.start
-             
+             elif isinstance(loc_idx, np.ndarray): # Boolean array
+                 loc_idx = np.where(loc_idx)[0][0]
+                 
              # pre_period indices
              pre_idx = [0, loc_idx - 1]
              post_idx = [loc_idx, len(ts_data)-1]
@@ -1051,7 +1040,6 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             'object': ci, # Return object for plotting
             'summary': summary,
             'report': report,
-            'p_value': ci.p_value,
             'p_value': ci.p_value,
             'ate': ci.summary_data.loc['abs_effect', 'average'],
             'ate_lower': ci.summary_data.loc['abs_effect_lower', 'average'],
