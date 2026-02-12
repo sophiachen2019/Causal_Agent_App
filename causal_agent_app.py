@@ -1008,7 +1008,6 @@ with tab_guide:
         - Predicts the counterfactual using a Bayesian Structural Time Series model.
         - **Control Variables**: Select external predictors (Covariates) like "Marketing Spend" to improve model accuracy.
         - **Synthetic Control**: Run as "Panel Data" to use other units as controls.
-    The application is divided into two main analysis modules:
 
     #### A. Observational Analysis
     Use this for standard cross-sectional analysis or when you have user-level data without a time-series dimension.
@@ -2135,14 +2134,13 @@ with tab_quasi:
         st.subheader("Configuration: CausalImpact")
         st.info("This method aggregates your User-Level data into a Daily/Weekly Time Series.")
         
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
+        # Row 1: Date and Intervention
+        col_r1_1, col_r1_2 = st.columns(2)
+        with col_r1_1:
             date_cols = df.select_dtypes(include=['datetime', 'object']).columns
             ci_date_col = st.selectbox("Date Column", date_cols, index=get_index(date_cols, "Date", 0), key="ci_date")
-            
-            num_cols = df.select_dtypes(include=[np.number]).columns
-            ci_outcome = st.selectbox("Outcome Column (to aggregate)", num_cols, index=get_index(num_cols, "Daily_Revenue", 0), key="ci_y")
-        with col_c2:
+        
+        with col_r1_2:
             # We need to know the range to offer a date picker
             try:
                 min_date = pd.to_datetime(df[ci_date_col]).min()
@@ -2150,7 +2148,6 @@ with tab_quasi:
                 
                 # Default intervention date
                 if 'Is_Treated_Region' in df.columns:
-                    # In simulation, intervention started at index 300 (Oct 28, 2023)
                     default_int = pd.to_datetime('2023-10-28')
                 else:
                     default_int = min_date + (max_date - min_date) / 2
@@ -2166,14 +2163,28 @@ with tab_quasi:
                 st.warning("Could not parse Date column. Please process it in Exploratory tab first.")
                 ci_intervention = None
 
-        # --- Unit / Panel Support ---
+        # Row 2: Outcome and Control Variables
+        col_r2_1, col_r2_2 = st.columns(2)
+        with col_r2_1:
+            num_cols = df.select_dtypes(include=[np.number]).columns
+            ci_outcome = st.selectbox("Outcome Column (to aggregate)", num_cols, index=get_index(num_cols, "Daily_Revenue", 0), key="ci_y")
+        
+        with col_r2_2:
+             if st.session_state.get('sim_type') == 'BSTS Demo':
+                  candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
+             else:
+                  # Note: ci_unit_col is not defined yet, so we only exclude date/outcome
+                  candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome] if pd.api.types.is_numeric_dtype(df[c])]
+
+             ci_covariates = st.multiselect("Control Variables (Covariates)", candidates, help="Select additional variables (e.g. Marketing Spend, Weather) to help the model predict the counterfactual.")
+
         # --- Unit / Filter Configuration ---
         st.markdown("##### Data Scope / Filtering")
         col_p1, col_p2 = st.columns(2)
         
         # Candidate columns for Unit ID
-        candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
-        ci_unit_col = st.selectbox("Unit Identifier Column (Optional)", ["None"] + candidates, index=get_index(["None"] + candidates, "Region", 0), help="Select if you want to filter for a specific unit OR run Panel Analysis.")
+        candidates_unit = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
+        ci_unit_col = st.selectbox("Unit Identifier Column (Optional)", ["None"] + candidates_unit, index=get_index(["None"] + candidates_unit, "Region", 0), help="Select if you want to filter for a specific unit OR run Panel Analysis.")
         
         ci_treated_unit = None
         if ci_unit_col != "None":
@@ -2183,14 +2194,6 @@ with tab_quasi:
             ci_unit_col = None
             
         use_panel_data = st.checkbox("Run as Panel Data / Synthetic Control", value=True if ci_unit_col else False, help="If checked, uses other units as controls. If unchecked, performs simple time-series analysis on the Target Unit (or entire data).")
-
-
-        if st.session_state.get('sim_type') == 'BSTS Demo':
-             candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome]]
-        else:
-             candidates = [c for c in df.columns if c not in [ci_date_col, ci_outcome, ci_unit_col] if pd.api.types.is_numeric_dtype(df[c])]
-
-        ci_covariates = st.multiselect("Control Variables (Covariates)", candidates, help="Select additional variables (e.g. Marketing Spend, Weather) to help the model predict the counterfactual.")
 
         if st.button("Run CausalImpact", type="primary"):
             if ci_intervention:
