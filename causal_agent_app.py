@@ -236,7 +236,7 @@ col_header, col_feedback = st.columns([5, 1])
 
 with col_header:
     st.title("🤖 Causal Inference Application")
-    st.markdown("**Builder:** [Sophia Chen](https://www.linkedin.com/in/sophia-chen-34794893/) | **Email:** sophiachen2012@gmail.com | **Medium:** [medium.com/@sophiachen2012](https://medium.com/@sophiachen2012)")
+    st.markdown("**Builder:** [Sophia Chen](https://shunqinchen.com) ")
 
 with col_feedback:
     # Feedback Popover to save space
@@ -292,7 +292,16 @@ latest_version = history[0] if history else {"Version": "Unknown", "Release Date
 
 # Load Data
 # --- Tabs Setup ---
-# --- Tabs Setup ---
+st.markdown(
+    """
+    <style>
+    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
+        font-size: 1.15rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 tab_guide, tab_eda, tab_observational, tab_quasi, tab_chat = st.tabs(["📘 User Guide", "📊 Exploratory Analysis", "🔍 Observational Analysis", "📈 Quasi-Experimental Analysis", "💬 AI Assistant"])
 
 # ==========================================
