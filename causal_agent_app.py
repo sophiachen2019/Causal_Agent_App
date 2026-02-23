@@ -236,7 +236,7 @@ col_header, col_feedback = st.columns([5, 1])
 
 with col_header:
     st.title("🤖 Causal Inference Application")
-    st.markdown("**Builder:** [Sophia Chen](https://shunqinchen.com) ")
+    st.markdown("**Builder:** [Sophia Chen](https://www.shunqinchen.com?utm_source=Streamlit&utm_medium=causal_inference&utm_campaign=causal_inference_app) ")
 
 with col_feedback:
     # Feedback Popover to save space
