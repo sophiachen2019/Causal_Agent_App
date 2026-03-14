@@ -7,7 +7,7 @@ Try it out here: https://causalinferenceagent.streamlit.app/
 ## 🚀 Key Features
 
 - **Observational Analysis**: Implements robust causal estimation methods including OLS/Logit, Propensity Score Matching (PSM), Inverse Propensity Weighting (IPTW), Double Machine Learning (DML), and Meta-Learners (S/T-Learner).
-- **Quasi-Experimental Analysis**: Dedicated modules for **Difference-in-Differences (DiD)** and **CausalImpact (Bayesian Structural Time Series)** for panel and time-series data.
+- **Quasi-Experimental Analysis**: Dedicated modules for **Difference-in-Differences (DiD)**, **CausalImpact (Bayesian Structural Time Series)**, and **GeoLift (Synthetic Control via R)** for panel and geographic split-testing data.
 - **AI Assistant**: An integrated chatbot powered by Gemini (Google GenAI) to provide guidance on methodology, interpret results, and suggest best practices.
 - **Reproducible Research**: One-click generation of Python scripts to reproduce any analysis performed in the UI.
 - **Data Preprocessing**: Built-in tools for imputation, winsorization, log transformations, and standardization.
@@ -44,7 +44,7 @@ Navigate through the tabs:
 1. **📘 User Guide**: Learn about the methodologies and how to interpret results.
 2. **📊 Exploratory Analysis**: Profile your data, perform transformations and visualizations.
 3. **🔍 Observational Analysis**: Run cross-sectional causal models with refutation tests.
-4. **📈 Quasi-Experimental Analysis**: Analyze impact over time with DiD or BSTS.
+4. **📈 Quasi-Experimental Analysis**: Analyze impact over time with DiD, BSTS, or GeoLift.
 5. **💬 AI Assistant**: Chat with the agent for expert advice.
 
 ## 📁 Project Structure
@@ -62,6 +62,7 @@ Navigate through the tabs:
 - `dowhy`: Causal modeling and refutation
 - `econml`: Advanced ML-based causal estimation
 - `causalimpact`: Bayesian Structural Time Series
+- `rpy2`: R to Python interface (requires R and the GeoLift package installed)
 - `statsmodels`: Statistical modeling
 - `google-genai`: AI Assistant integration
 - `pandas`, `numpy`, `matplotlib`, `seaborn`: Data processing and visualization

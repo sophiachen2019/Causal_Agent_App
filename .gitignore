@@ -118,3 +118,4 @@ venv.bak/
 # IDE
 .idea/
 .vscode/
+geolift_*.png

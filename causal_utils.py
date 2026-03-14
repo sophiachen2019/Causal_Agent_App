@@ -1056,3 +1056,327 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
         import traceback
         traceback.print_exc()
         return {'error': str(e)}
+
+def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, intervention_date, 
+                          treatment_duration=14, model="none", alpha=0.1, 
+                          confidence_intervals=False, stat_test="Total"):
+    """
+    Runs GeoLift Analysis using rpy2 to bridge Python and Meta's GeoLift R package.
+    """
+    import rpy2.robjects as robjects
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects import pandas2ri
+    from rpy2.robjects.conversion import localconverter
+    
+    # Combined converter for robust thread safety in Streamlit
+    cv = robjects.default_converter + pandas2ri.converter
+
+    with localconverter(cv):
+        try:
+            try:
+                base = importr('base')
+                utils = importr('utils')
+                geolift = importr('GeoLift')
+            except Exception as e:
+                return {"error": f"Failed to load R GeoLift package. Ensure it is installed via Rscript. Details: {e}"}
+
+            df_clean = df[[date_col, geo_col, kpi_col]].copy()
+            df_clean = df_clean.dropna()
+            
+            # Convert dates to string format expected by R GeoDataRead
+            df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.strftime('%Y-%m-%d')
+            df_clean[kpi_col] = pd.to_numeric(df_clean[kpi_col])
+            
+            # Pass DataFrame to R
+            r_df = pandas2ri.py2rpy(df_clean)
+                
+            robjects.globalenv['py_data'] = r_df
+            robjects.globalenv['time_id'] = date_col
+            robjects.globalenv['geo_id'] = geo_col
+            robjects.globalenv['Y_id'] = kpi_col
+            
+            # Additional GeoLift Parameters
+            robjects.globalenv['treated_locs'] = robjects.StrVector([treated_geo])
+            robjects.globalenv['treatment_start'] = str(intervention_date)
+            robjects.globalenv['duration'] = int(treatment_duration)
+            robjects.globalenv['model_name'] = model
+            robjects.globalenv['alpha_val'] = float(alpha)
+            robjects.globalenv['calc_ci'] = bool(confidence_intervals)
+            robjects.globalenv['test_stat'] = stat_test
+            
+            robjects.r("""
+            # 1. Map dates to indices BEFORE GeoDataRead drops the date column
+            # GeoDataRead maps the chronological order of sorted unique dates to 1..N
+            unique_dates <- sort(unique(as.Date(py_data[[time_id]])))
+            treatment_start_date <- as.Date(treatment_start)
+            
+            # Find the index of the first date >= treatment_start
+            match_idx <- which(unique_dates >= treatment_start_date)
+            
+            if (length(match_idx) == 0) {
+                stop(paste("Treatment start date", treatment_start, "is after all available data."))
+            }
+            treatment_start_idx <- match_idx[1]
+            
+            # 2. Convert the dataframe for GeoLift
+            geo_data <- GeoDataRead(data = py_data,
+                                    date_id = time_id,
+                                    location_id = geo_id,
+                                    Y_id = Y_id,
+                                    format = "yyyy-mm-dd")
+            
+            # 3. Calculate end index based on duration
+            max_time <- max(geo_data$time)
+            treatment_end_idx <- min(treatment_start_idx + duration - 1, max_time)
+            
+            if (treatment_end_idx < treatment_start_idx) {
+               stop("Treatment duration too short or starts too late in the series.")
+            }
+            
+            # 4. Run GeoLift
+            gl_res <- GeoLift(Y_id = "Y",
+                              time_id = "time",
+                              location_id = "location",
+                              data = geo_data,
+                              locations = treated_locs,
+                              treatment_start_time = treatment_start_idx,
+                              treatment_end_time = treatment_end_idx,
+                              model = model_name,
+                              alpha = alpha_val,
+                              ConfidenceIntervals = calc_ci,
+                              stat_test = test_stat)
+                              
+            summary_res <- summary(gl_res)
+            """)
+            
+            # Safely extract from R environment with NULL checks
+            r_summary = robjects.globalenv['summary_res']
+            if r_summary is robjects.NULL:
+                return {"error": "GeoLift summary failed: The model did not converge or produced NULL results."}
+                
+            robjects.r("""
+            avg_lift <- summary_res$ATT_est
+            cumulative_lift <- summary_res$incremental
+            p_val <- summary_res$pvalue
+            """)
+            
+            r_avg = robjects.globalenv['avg_lift']
+            r_cum = robjects.globalenv['cumulative_lift']
+            r_p = robjects.globalenv['p_val']
+            
+            if r_avg is robjects.NULL or r_cum is robjects.NULL or r_p is robjects.NULL:
+                return {"error": "GeoLift estimation produced NULL metrics. Check if control group has enough variance."}
+                
+            avg_lift = r_avg[0]
+            cum_lift = r_cum[0]
+            p_val = r_p[0]
+            
+            significant = "Yes" if p_val < alpha else "No"
+            
+            import time
+            timestamp = int(time.time())
+            impact_plot_file = f"geolift_impact_plot_{timestamp}.png"
+            att_plot_file = f"geolift_att_plot_{timestamp}.png"
+            robjects.globalenv['impact_plot_path'] = impact_plot_file
+            robjects.globalenv['att_plot_path'] = att_plot_file
+            
+            # Generate the plots and capture the full inference summary
+            robjects.r("""
+            # Capture the full beautifully formatted summary as a single block of text
+            full_summary_text <- paste(capture.output(print(summary(gl_res)), type='message'), collapse='\\n')
+            
+            # Standard Plot (Treated vs Synthetic)
+            png(impact_plot_path, width=800, height=600)
+            print(plot(gl_res))
+            dev.off()
+            
+            # ATT Plot (Average Effect on Treated)
+            png(att_plot_path, width=800, height=600)
+            print(plot(gl_res, type="ATT"))
+            dev.off()
+            """)
+            
+            full_summary = robjects.globalenv['full_summary_text'][0]
+            
+            report = f"""
+            ### GeoLift Analysis Results
+            **Treated Geography**: {treated_geo}
+            **Model Type**: {model}
+            
+            **Average Estimated Treatment Effect**: {avg_lift:.2f}
+            **Cumulative Lift**: {cum_lift:.2f}
+            **P-Value**: {p_val:.4f}
+            
+            **Statistically Significant (p < {alpha})?**: {significant}
+            
+            #### Full Inference Summary
+            ```text
+            {full_summary}
+            ```
+            """
+            
+            # Cleanup
+            robjects.r("rm(gl_res, summary_res, avg_lift, cumulative_lift, p_val, full_summary_text)")
+            
+            return {
+                "summary": report,
+                "plot_path": impact_plot_file,
+                "att_plot_path": att_plot_file
+            }
+            
+        except Exception as e:
+            return {"error": f"GeoLift execution failed: {e}"}
+
+
+def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cutoff_date=None, 
+                      n_markets="1", lookback_window=1, model="none", alpha=0.1, side_of_test="two_sided",
+                      parallel=True, ns=1000, effect_size_mode="Full", normalize=False):
+    """
+    Runs GeoLift Market Selection (Power Analysis) via rpy2 with performance optimizations.
+    """
+    import rpy2.robjects as robjects
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects import pandas2ri
+    from rpy2.robjects.conversion import localconverter
+    import os
+    import time
+    
+    # Combined converter for thread safety
+    cv = robjects.default_converter + pandas2ri.converter
+
+    with localconverter(cv):
+        try:
+            try:
+                base = importr('base')
+                grdevices = importr('grDevices')
+                geolift = importr('GeoLift')
+            except Exception as e:
+                return {"error": f"Failed to load R GeoLift package. Details: {e}"}
+
+            df_clean = df[[date_col, geo_col, kpi_col]].copy()
+            
+            # Application of historical cutoff if provided
+            if cutoff_date:
+                df_clean = df_clean[pd.to_datetime(df_clean[date_col]) <= pd.to_datetime(cutoff_date)]
+                
+            df_clean = df_clean.dropna()
+            df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.strftime('%Y-%m-%d')
+            df_clean[kpi_col] = pd.to_numeric(df_clean[kpi_col])
+            
+            # Pass DataFrame to R
+            r_df = pandas2ri.py2rpy(df_clean)
+                
+            robjects.globalenv['py_data'] = r_df
+            robjects.globalenv['date_col_name'] = date_col
+            robjects.globalenv['geo_col_name'] = geo_col
+            robjects.globalenv['kpi_col_name'] = kpi_col
+            
+            robjects.r("""
+            geo_data <- GeoDataRead(data = py_data,
+                                    date_id = date_col_name,
+                                    location_id = geo_col_name,
+                                    Y_id = kpi_col_name,
+                                    format = "yyyy-mm-dd")
+            """)
+            
+            # Parameters
+            robjects.globalenv['duration'] = int(treatment_duration)
+            robjects.globalenv['lookback'] = int(lookback_window)
+            robjects.globalenv['model_name'] = model
+            robjects.globalenv['alpha_val'] = float(alpha)
+            robjects.globalenv['side'] = side_of_test
+            robjects.globalenv['parallel_run'] = bool(parallel)
+            robjects.globalenv['ns_val'] = int(ns)
+            robjects.globalenv['normalize_val'] = bool(normalize)
+            
+            # Effect size handling
+            if effect_size_mode == "Fast":
+                robjects.r("es_sequence <- c(0, 0.1)")
+            else:
+                robjects.r("es_sequence <- seq(0, 0.2, 0.05)")
+
+            # Handle N - can be a single int or a vector
+            try:
+                n_list = [int(x.strip()) for x in str(n_markets).split(",")]
+                robjects.globalenv['n_markets_vec'] = robjects.IntVector(n_list)
+            except:
+                robjects.globalenv['n_markets_vec'] = 1
+
+            timestamp = int(time.time())
+            power_plot_file = f"geolift_power_{timestamp}.png"
+            series_plot_file = f"geolift_series_{timestamp}.png"
+            robjects.globalenv['p_plot_path'] = power_plot_file
+            robjects.globalenv['s_plot_path'] = series_plot_file
+
+            robjects.r("""
+            # Market Selection searches for the best test markets
+            market_selection <- GeoLiftMarketSelection(
+                data = geo_data,
+                treatment_periods = duration,
+                N = n_markets_vec,
+                Y_id = "Y",
+                location_id = "location",
+                time_id = "time",
+                lookback_window = lookback,
+                model = model_name,
+                alpha = alpha_val,
+                side_of_test = side,
+                parallel = parallel_run,
+                parallel_setup = "parallel", # Use multitasking on Mac
+                ns = ns_val,
+                normalize = normalize_val,
+                effect_size = es_sequence,
+                ProgressBar = FALSE,
+                print = FALSE
+            )
+            
+            # Capture the best markets table
+            # Strip custom classes to ensure smooth R->Python conversion
+            best_markets_df <- as.data.frame(market_selection$BestMarkets)
+            
+            # Plots for the #1 ranked market
+            # 1. Power Curve Plot (using ggplot2)
+            library(ggplot2)
+            top_location <- as.character(best_markets_df$location[1])
+            pc_data <- market_selection$PowerCurves[market_selection$PowerCurves$location == top_location, ]
+            
+            png(p_plot_path, width = 800, height = 600)
+            p_plot <- ggplot(pc_data, aes(x = AvgDetectedLift, y = power)) + 
+              geom_line(color = "#1f77b4", size = 1.2) + 
+              geom_point(color = "#1f77b4", size = 3) +
+              theme_minimal() + 
+              labs(title = paste("Power Curve:", top_location),
+                   subtitle = "Likelihood of detecting effect vs. Proposed Lift Size",
+                   x = "Effect Size (Average Detected Lift)",
+                   y = "Probability of Success (Power)") +
+              geom_hline(yintercept = 0.8, linetype = "dashed", color = "red") +
+              annotate("text", x = min(pc_data$AvgDetectedLift), y = 0.82, label = "80% Power Threshold", color = "red", hjust = 0)
+            print(p_plot)
+            dev.off()
+            
+            # 2. Historical Fit Plot
+            png(s_plot_path, width = 800, height = 600)
+            plot(market_selection, market_ID = 1)
+            dev.off()
+            """)
+            
+            r_best_markets = robjects.globalenv['best_markets_df']
+            
+            # Convert R dataframe to Pandas
+            if isinstance(r_best_markets, pd.DataFrame):
+                df_best_markets = r_best_markets
+            else:
+                with localconverter(cv):
+                    df_best_markets = pandas2ri.rpy2py(r_best_markets)
+                
+            return {
+                "df": df_best_markets,
+                "power_plot": power_plot_file,
+                "series_plot": series_plot_file
+            }
+            
+        except Exception as e:
+            return {"error": f"GeoLift Market Selection failed: {e}"}
+            
+        except Exception as e:
+            return {"error": f"GeoLift Market Selection failed: {e}"}

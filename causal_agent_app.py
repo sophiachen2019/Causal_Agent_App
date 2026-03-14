@@ -174,7 +174,7 @@ def simulate_bsts_demo_data():
     return df
 
 def simulate_data(n_samples=1000, type="Standard"):
-    if type == "BSTS Demo":
+    if type == "BSTS Demo" or type == "GeoLift Demo (Geographic Intervention)":
         return simulate_bsts_demo_data()
     return simulate_standard_data(n_samples)
 
@@ -316,7 +316,7 @@ with tab_eda:
     
     if data_source == "Simulated Data":
         st.markdown("---")
-        sim_options = ["Standard (Cross-sectional/DiD)", "BSTS Demo (Multi-region Time Series)"]
+        sim_options = ["Standard (Cross-sectional/DiD)", "BSTS / GeoLift Demo (Multi-region Time Series)"]
         # Use session state to persist selection
         if 'sim_type' not in st.session_state:
             st.session_state.sim_type = "Standard"
@@ -325,7 +325,11 @@ with tab_eda:
         simulate_type = st.selectbox("Simulation Type", sim_options, index=current_idx)
         
         # Check if we need to reset/re-simulate
-        target_type = "Standard" if "Standard" in simulate_type else "BSTS Demo"
+        if "Standard" in simulate_type:
+            target_type = "Standard"
+        else:
+            target_type = "BSTS Demo"
+
         if st.session_state.sim_type != target_type:
             st.session_state.df = simulate_data(type=target_type)
             st.session_state.sim_type = target_type
@@ -922,7 +926,7 @@ with tab_observational:
             "Linear Double Machine Learning (LinearDML)", 
             "Generalized Random Forests (CausalForestDML)",
             "Meta-Learner: S-Learner",
-            "Meta-Learner: T-Learner" 
+            "Meta-Learner: T-Learner"
         ]
     )
 
@@ -1037,6 +1041,7 @@ with tab_guide:
     | :--- | :--- | :--- | :--- |
     | **Difference-in-Differences (DiD)** | Measuring impact when you have a **Control Group** and **Pre/Post Periods**. Assumes parallel trends. | **Structure**: Long format (one row per unit per time).<br>**Input**: Select `Treatment Col` (Group), `Outcome`, and `Time Period` (Pre/Post). | **Table**: View Interaction Coefficient.<br>**Interpretation**: A significant p-value (< 0.05) on the **Interaction Term** indicates a causal effect. The coefficient shows the absolute change in the outcome. |
     | **CausalImpact (Bayesian STS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. Check "Run as Panel Data" to use other units as controls. | **Metrics & Plots**: View Average/Cumulative effect.<br>**Interpretation**: Focus on **Relative Lift** (%) and the **95% Confidence Interval**. If the CI does not cross zero, the effect is statistically significant. |
+    | **GeoLift (Synthetic Control via R)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data, outputting MDE and Power.<br>2. **Impact Estimation**: Estimates true causal effect post-campaign. | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, focus on the **p-value** and **Average Estimated Treatment Effect**. A p-value < alpha (e.g., 0.10) indicates a significant campaign impact. |
     
 
     ### 3. Export Data and Script
@@ -2090,7 +2095,7 @@ with tab_quasi:
     
     quasi_method = st.selectbox(
         "Analysis Method",
-        ["Difference-in-Differences (DiD)", "CausalImpact (Bayesian Time Series)"],
+        ["Difference-in-Differences (DiD)", "CausalImpact (Bayesian Time Series)", "GeoLift (Synthetic Control via R)"],
         help="DiD requires Control Group + Pre/Post. CausalImpact requires Pre-Period time series to predict Post-Period."
     )
     
@@ -2232,6 +2237,171 @@ with tab_quasi:
                         }
                         st.success("Analysis Complete! Scroll down to see results.")
 
+
+    # --- GeoLift Analysis ---
+    elif quasi_method == "GeoLift (Synthetic Control via R)":
+        st.subheader("Configuration: GeoLift Analysis")
+        
+        # Power Analysis vs Estimation Toggle
+        geolift_mode = st.radio(
+            "What do you want to do?",
+            ["Power Analysis (Market Selection)", "Impact Estimation (Post-Test)"],
+            horizontal=True,
+            help="Use Power Analysis before a test to find the best markets. Use Impact Estimation after a test to measure the results."
+        )
+        
+        st.write("---")
+        
+        if geolift_mode == "Power Analysis (Market Selection)":
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                power_date = st.selectbox("Date Column", df.columns, index=get_index(df.columns, 'Date', 0), key="pow_date")
+                power_geo = st.selectbox("Geography/Location Column", df.columns, index=get_index(df.columns, 'Region', 1), key="pow_geo")
+            with col_p2:
+                num_cols = df.select_dtypes(include=[np.number]).columns
+                power_kpi = st.selectbox("Outcome Column", num_cols, index=get_index(num_cols, 'KPI', 0) if len(num_cols) > 0 else 0, key="pow_kpi")
+            
+            power_duration = st.number_input("Expected Treatment Duration (Days)", min_value=1, value=14, key="pow_dur", help="How long do you expect the marketing test to run?")
+            
+            # Cutoff date logic for testing on datasets with existing treatment
+            pow_min_date = df[power_date].min()
+            pow_max_date = df[power_date].max()
+            pow_default_cutoff = pow_max_date
+            
+            # For the demo, default to Nov 1st 2023 if available
+            if 'Region' in df.columns and 'Date' in df.columns:
+                demo_cutoff = pd.to_datetime('2023-11-01')
+                if demo_cutoff >= pow_min_date and demo_cutoff <= pow_max_date:
+                    pow_default_cutoff = demo_cutoff
+            
+            power_cutoff_date = st.date_input(
+                "Historical Data Cutoff", 
+                value=pow_default_cutoff, 
+                min_value=pow_min_date.date() if hasattr(pow_min_date, 'date') else None,
+                max_value=pow_max_date.date() if hasattr(pow_max_date, 'date') else None,
+                help="Simulation will only use data up to this date. Useful for testing on datasets that already contain intervention data.",
+                key="pow_cutoff"
+            )
+
+            with st.expander("Advanced Configuration"):
+                st.markdown("""
+                **⚡ Performance Tips**:
+                - **Model**: 'none' is the fastest. 'Ridge' adds precision but can be 3-5x slower.
+                - **Lookback**: Increasing this creates a linear multiplier on runtime (e.g. 5x for window of 5).
+                - **N**: Entering multiple values (e.g. '1, 2') doubles the simulation work.
+                """)
+                
+                pow_n_markets = st.text_input("Number of Test Markets (comma-separated)", value="1", help="e.g. '1' to test single regions, or '1, 2' to test groups of 1 and 2.")
+                pow_lookback = st.number_input("Lookback Window", min_value=1, value=1, help="Number of historical samples. Set to 1 for fast iteration, 5+ for final decisions.")
+                pow_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN"], index=0, help="'Ridge' is recommended for small panels, 'GSYN' for large panels.")
+                pow_alpha = st.slider("Significance Level (Alpha)", 0.01, 0.2, 0.1, help="Standard is 0.1 for GeoLift.")
+                pow_side = st.selectbox("Side of Test", ["two_sided", "one_sided"], index=0)
+                pow_parallel = st.checkbox("Enable Parallel Processing", value=True, help="Uses multiple CPU cores to speed up simulations.")
+
+                st.write("---")
+                st.markdown("**🛡️ Performance Overrides (Speed vs. Precision)**")
+                pow_es_mode = st.radio("Simulation Density", ["Fast (0%, 10%)", "Full (0%, 5%, 10%, 15%, 20%)"], index=0, 
+                                        help="Fast mode tests fewer points, significantly reducing runtime for exploration.")
+                pow_ns = st.selectbox("Resamples (NS)", [100, 1000], index=0, 
+                                        help="1000 is for final publication; 100 is sufficient for market selection.")
+                pow_normalize = st.checkbox("Normalize Data", value=False, help="Scaling outcome data can speed up computation on large raw values.")
+                
+            st.info("Power Analysis will search through all unique geographies in the dataset to find the best candidate for treatment.")
+            
+            if st.button("Run Power Analysis", type="primary"):
+                st.write("---")
+                with st.spinner("Running R GeoLiftMarketSelection (Augmentation models and multiple lookbacks increase runtime)..."):
+                    try:
+                        results_power = causal_utils.run_geolift_power(
+                            df, power_date, power_geo, power_kpi, 
+                            treatment_duration=power_duration, 
+                            cutoff_date=str(power_cutoff_date),
+                            n_markets=pow_n_markets,
+                            lookback_window=pow_lookback,
+                            model=pow_model,
+                            alpha=pow_alpha,
+                            side_of_test=pow_side,
+                            parallel=pow_parallel,
+                            ns=pow_ns,
+                            effect_size_mode="Fast" if "Fast" in pow_es_mode else "Full",
+                            normalize=pow_normalize
+                        )
+                        
+                        st.session_state.quasi_results = {
+                            'method': 'GeoLift Power Analysis (Market Selection)',
+                            'result': results_power
+                        }
+                        st.session_state.quasi_analysis_run = True
+                        st.session_state.quasi_method_run = "GeoLift Power Analysis (Market Selection)"
+                        st.success("Power Analysis Complete! Scroll down to see results.")
+                    except Exception as e:
+                        st.error(f"Power Analysis failed: {e}")
+                        
+        else: # Impact Estimation
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                geo_lift_date = st.selectbox("Date Column", df.columns, index=get_index(df.columns, 'Date', 0), key="gl_date")
+                geo_lift_geo = st.selectbox("Geography/Location Column", df.columns, index=get_index(df.columns, 'Region', 1), key="gl_geo")
+            with col_g2:
+                num_cols = df.select_dtypes(include=[np.number]).columns
+                geo_lift_kpi = st.selectbox("Outcome Column", num_cols, index=get_index(num_cols, 'KPI', 0) if len(num_cols) > 0 else 0, key="gl_kpi")
+                
+                treated_geo_options = []
+                if geo_lift_geo in df.columns:
+                    treated_geo_options = df[geo_lift_geo].dropna().astype(str).unique().tolist()
+                geo_lift_treated = st.selectbox("Treated Geography", treated_geo_options, key="gl_treat")
+            
+            min_date = df[geo_lift_date].min()
+            max_date = df[geo_lift_date].max()
+            default_int = min_date + (max_date - min_date) / 2
+            
+            try:
+                # Let's try to infer if they are using the demo dataset
+                if 'Region' in df.columns and 'Date' in df.columns and 'Chicago' in treated_geo_options:
+                     default_int_val = pd.to_datetime('2023-03-02')
+                     if default_int_val >= min_date and default_int_val <= max_date:
+                         default_int = default_int_val
+            except:
+                 pass
+                 
+            geo_lift_intervention_date = st.date_input("Intervention Start Date", value=default_int, min_value=min_date.date() if hasattr(min_date, 'date') else None, max_value=max_date.date() if hasattr(max_date, 'date') else None, key="gl_int")
+            geo_lift_duration = st.number_input("Treatment Duration (Days)", min_value=1, value=14, key="gl_dur2")
+
+            with st.expander("Estimation Configuration"):
+                est_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN"], index=0, key="gl_model_est")
+                est_alpha = st.slider("Significance Level (Alpha)", 0.01, 0.2, 0.1, help="Threshold for statistical significance.", key="gl_alpha_est")
+                est_ci = st.checkbox("Calculate Confidence Intervals", value=False, help="Adds uncertainty estimation but increases runtime.", key="gl_ci_est")
+                est_test = st.selectbox("Statistical Test", ["Total", "Negative", "Positive"], index=0, help="'Total' is standard for overall lift.", key="gl_test_est")
+    
+            if st.button("Run GeoLift Analysis", type="primary"):
+                st.write("---")
+                with st.spinner("Initializing R Environment and Running GeoLift..."):
+                    try:
+                        results = causal_utils.run_geolift_analysis(
+                            df, geo_lift_date, geo_lift_geo, geo_lift_treated, geo_lift_kpi, 
+                            str(geo_lift_intervention_date), 
+                            treatment_duration=geo_lift_duration,
+                            model=est_model,
+                            alpha=est_alpha,
+                            confidence_intervals=est_ci,
+                            stat_test=est_test
+                        )
+                        st.session_state.quasi_results = {
+                            'method': 'GeoLift (Synthetic Control via R)',
+                            'result': results,
+                            'date_col': geo_lift_date,
+                            'geo_col': geo_lift_geo,
+                            'kpi_col': geo_lift_kpi,
+                            'treated_geo': geo_lift_treated,
+                            'intervention_date': str(geo_lift_intervention_date),
+                            'treatment_duration': geo_lift_duration
+                        }
+                        st.session_state.quasi_analysis_run = True
+                        st.session_state.quasi_method_run = "GeoLift (Synthetic Control via R)"
+                        st.success("GeoLift Analysis Complete! Scroll down to see results.")
+                    except Exception as e:
+                        st.error(f"GeoLift Analysis failed: {e}")
+
     # --- SHARED RESULTS & EXPORT MODULE ---
     if st.session_state.get('quasi_analysis_run', False) and st.session_state.get('quasi_results') is not None:
         st.divider()
@@ -2346,6 +2516,100 @@ with tab_quasi:
             except Exception as e:
                 st.warning(f"Could not render plot: {e}")
 
+        elif quasi_method_run == "GeoLift Power Analysis (Market Selection)":
+            st.divider()
+
+            if "error" in results['result']:
+                st.error(results['result']['error'])
+            else:
+                st.subheader("Results: GeoLift Market Selection")
+                
+                st.markdown(r"""
+                **Methodology (Market Selection & Power Analysis):**
+                GeoLift's Market Selection uses historical data to identify the best candidate markets for an experiment. It evaluates possible treated units by checking their pre-treatment fit (using Synthetic Control) and their statistical power (calculating the Minimum Detectable Effect).
+                
+                *Methodology References:* 
+                - Augmented Synthetic Control Method (*Ben-Michael, Feller, and Roth, 2021*)
+                - Meta Open Source GeoLift implementation (*Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023*)
+                
+                **Augmentation Models**:
+                - **Ridge**: Adds a penalty to the synthetic control weights to handle smaller datasets. Highly recommended for datasets with few locations or noisy signals.
+                - **GSYN (Generalized Synthetic Control)**: Uses a latent factor model to estimate counterfactuals. Best for larger datasets with many locations, as it can capture complex unobserved time-varying trends.
+                
+                **Formula Definition:**
+                The power analysis evaluates the probability of rejecting the null hypothesis $H_0: \text{Lift} = 0$:
+                $$ \text{Power} = P(\text{p-value} < \alpha \mid H_1) $$
+                where $H_1$ is a simulated effect of size $\delta$.
+                """)
+                st.divider()
+                
+                st.markdown("Below are the ranked candidate markets based on pre-treatment fit and required MDE:")
+                
+                if 'df' in results['result']:
+                    st.dataframe(results['result']['df'], use_container_width=True)
+                    
+                    st.markdown(r"""
+                    #### 💡 How to Interpret & Select Markets
+                    To select the best candidate for your experiment, look for rows that balance these criteria:
+                    
+                    1.  **Lower RMSE (Pre-treatment Fit)**: Look at the **`AvgScaledL2Imbalance`** column. This measures how well the synthetic control matches your test market historically. 
+                        *   *Benchmark*: Values **below 0.2** indicate a strong fit. Avoid markets where this is very high.
+                    2.  **Lower MDE (Sensitivity)**: Look at the **`Average_MDE`** column. This is the smallest effect size the test can reliably detect. 
+                    3.  **Higher Power**: Look at the **`Power`** column. Standard practice is to aim for power $\ge$ 0.8 (80%).
+                    
+                    **Note on Locations**: If you see multiple regions listed for a single location (e.g., "North, South"), it means GeoLift recommends testing these regions **together as a cluster** to achieve the required statistical power.
+                    """)
+                    
+                    st.subheader("Diagnostic Plots (#1 Ranked Market)")
+                    col_plot1, col_plot2 = st.columns(2)
+                    with col_plot1:
+                        if 'power_plot' in results['result']:
+                            st.image(results['result']['power_plot'], caption="Power Curve: Effect Size vs Power", use_container_width=True)
+                    with col_plot2:
+                        if 'series_plot' in results['result']:
+                            st.image(results['result']['series_plot'], caption="Historical Fit: Treated vs Synthetic", use_container_width=True)
+
+        elif quasi_method_run == "GeoLift (Synthetic Control via R)":
+            st.divider()
+            
+            if "error" in results['result']:
+                st.error(results['result']['error'])
+            else:
+                st.subheader("Results: GeoLift (Synthetic Control via R)")
+                
+                st.markdown(r"""
+                **Methodology (Augmented Synthetic Control):**
+                GeoLift uses the Augmented Synthetic Control Method (ASCM) to estimate the causal effect of an intervention at the geographic level. It constructs a "synthetic" version of the treated location by finding a weighted combination of untreated locations that best matches the pre-treatment time series.
+                
+                *Methodology References:* 
+                - Augmented Synthetic Control Method (*Ben-Michael, Feller, and Roth, 2021*)
+                - Meta Open Source GeoLift implementation (*Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023*)
+                
+                **Formula Definition:**
+                Let region $1$ be treated and $2, \dots, N$ be the donor pool. ASCM seeks weights $W$ to minimize:
+                $$ \min_W \sum_{t=1}^{T_0} (Y_{1t} - \sum_{j=2}^N w_j Y_{jt})^2 $$
+                The augmented estimator adds a ridge adjustment:
+                $$ \hat{\tau}_{1t} = Y_{1t} - (\sum_{j=2}^N \hat{w}_j Y_{jt} + (\mathbf{X}_{1t} - \sum_{j=2}^N \hat{w}_j \mathbf{X}_{jt})^T \hat{\beta}) $$
+                """)
+                st.divider()
+                
+                st.markdown(results['result']['summary'])
+                
+                if 'plot_path' in results['result'] or 'att_plot_path' in results['result']:
+                    col_plot1, col_plot2 = st.columns(2)
+                    with col_plot1:
+                        if 'plot_path' in results['result']:
+                            try:
+                                st.image(results['result']['plot_path'], caption="GeoLift Results: Treated vs Synthetic Control", use_container_width=True)
+                            except Exception as e:
+                                st.warning(f"Could not load standard plot: {e}")
+                    with col_plot2:
+                        if 'att_plot_path' in results['result']:
+                            try:
+                                st.image(results['result']['att_plot_path'], caption="Average Treatment Effect on the Treated (ATT)", use_container_width=True)
+                            except Exception as e:
+                                st.warning(f"Could not load ATT plot: {e}")
+
         # --- EXPORT SECTION ---
         st.divider()
         st.subheader("Export Data and Script")
@@ -2395,7 +2659,7 @@ with tab_quasi:
                 n_iterations=50,
                 use_logit=p['use_logit']
             )
-        else:
+        elif quasi_method_run == "CausalImpact (Bayesian Time Series)":
             p = st.session_state.ci_params
             ts_params_script = {
                 'date_col': p['date_col'],
@@ -2426,6 +2690,93 @@ with tab_quasi:
                 unit_col=p['unit_col'],
                 treated_unit=p['treated_unit']
             )
+        elif "GeoLift" in quasi_method_run:
+            res_dict = st.session_state.get('quasi_results', {})
+            date_col = res_dict.get('date_col', 'date')
+            geo_col = res_dict.get('geo_col', 'location')
+            kpi_col = res_dict.get('kpi_col', 'Y')
+            treated_geo = res_dict.get('treated_geo', 'Treated_Location')
+            int_date = res_dict.get('intervention_date', '2023-01-01')
+            dur = res_dict.get('treatment_duration', 14)
+
+            script_quasi = f'''# Python Script for {quasi_method_run} using rpy2
+# Make sure to install: pip install rpy2 pandas
+import pandas as pd
+import rpy2.robjects as robjects
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
+
+# 1. Load your data
+# df = pd.read_csv("your_data.csv")
+# (For example purposes, replace this with your actual data loading)
+# Ensure the date column is a string format 'YYYY-MM-DD' and KPI is numeric.
+# df['{date_col}'] = pd.to_datetime(df['{date_col}']).dt.strftime('%Y-%m-%d')
+# df['{kpi_col}'] = pd.to_numeric(df['{kpi_col}'])
+
+# 2. Transfer Data to R Environment
+# (Uncomment the lines below when you have your 'df')
+"""
+cv = robjects.default_converter + pandas2ri.converter
+with localconverter(cv):
+    r_df = pandas2ri.py2rpy(df)
+robjects.globalenv['py_data'] = r_df
+"""
+
+# 3. GeoLift R Execution Block
+robjects.r("""
+library(GeoLift)
+library(dplyr)
+
+# Read and Format Data
+# geo_data <- GeoDataRead(data = py_data,
+#                         date_id = "{date_col}",
+#                         location_id = "{geo_col}",
+#                         Y_id = "{kpi_col}",
+#                         format = "yyyy-mm-dd")
+'''
+            if "Market Selection" in quasi_method_run:
+                script_quasi += f'''
+# Run Power Analysis / Market Selection
+# results <- GeoLiftMarketSelection(data = geo_data,
+#                                   treatment_periods = {dur},
+#                                   N = c(1),
+#                                   Y_id = "Y",
+#                                   location_id = "location",
+#                                   time_id = "time",
+#                                   lookback_window = 1,
+#                                   effect_size = seq(0, 0.2, 0.05),
+#                                   model = "none",
+#                                   parallel = TRUE)
+
+# View best markets table
+# print(head(results$BestMarkets))
+# plot(results, market_ID = 1)
+""")
+'''
+            else:
+                script_quasi += f'''
+# Map intervention date to time index
+# time_index <- unique(geo_data$time)
+# all_dates <- unique(geo_data$date)
+# treatment_start_date <- as.Date("{int_date}")
+# 
+# valid_start_times <- time_index[as.Date(all_dates) >= treatment_start_date]
+# treatment_start_idx <- min(valid_start_times)
+# treatment_end_idx <- treatment_start_idx + {dur} - 1
+
+# Run Impact Estimation
+# results <- GeoLift(Y_id = "Y", 
+#                    time_id = "time", 
+#                    location_id = "location",
+#                    data = geo_data, 
+#                    locations = c("{treated_geo}"),
+#                    treatment_start_time = treatment_start_idx, 
+#                    treatment_end_time = treatment_end_idx)
+
+# summary(results)
+# plot(results)
+""")
+'''
 
             
         with col_ex2:
