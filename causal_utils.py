@@ -283,9 +283,11 @@ print(model.summary())
 
     elif estimation_method == "CausalImpact (Bayesian Time Series)":
         script += f"""
-# --- 3. Quasi-Experimental Analysis: CausalImpact ---
-print("Running CausalImpact Analysis...")
-from causalimpact import CausalImpact
+# --- 3. Quasi-Experimental Analysis: CausalImpact (via R) ---
+print("Running CausalImpact Analysis using R...")
+import rpy2.robjects as robjects
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
 
 date_col = '{ts_params['date_col']}' # Date
 outcome_col = '{outcome}'
@@ -334,36 +336,50 @@ ts_data = ts_data.sort_index()
 """
         script += """
 ts_data = ts_data.asfreq('D').ffill()
-"""
-        
-        script += """
-# --- Run CausalImpact ---
-pre_period = [ts_data.index.min(), pd.to_datetime(intervention_date) - pd.Timedelta(days=1)]
-post_period = [pd.to_datetime(intervention_date), ts_data.index.max()]
 
-# Robust Fallback for Index Handling
-try:
-    ci = CausalImpact(ts_data, pre_period, post_period)
-except KeyError:
-    # Fallback: Reset index to integer range if KeyErrors occur with DatetimeIndex
-    print("Fallback: Using Integer Index for CausalImpact...")
-    ts_data_reset = ts_data.reset_index(drop=True)
-    
-    # Map dates to integer indices
-    pre_idx = [0, len(ts_data.loc[:pd.to_datetime(intervention_date) - pd.Timedelta(days=1)]) - 1]
-    post_idx = [pre_idx[1] + 1, len(ts_data) - 1]
-    
-    # Rename columns to 0, 1, 2... for safety
-    ts_data_reset.columns = range(ts_data_reset.shape[1])
-    
-    ci = CausalImpact(ts_data_reset, pre_idx, post_idx)
+# --- Transfer to R and Run CausalImpact ---
+pre_period_start = ts_data.index.min().strftime('%Y-%m-%d')
+pre_period_end = (pd.to_datetime(intervention_date) - pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+post_period_start = pd.to_datetime(intervention_date).strftime('%Y-%m-%d')
+post_period_end = ts_data.index.max().strftime('%Y-%m-%d')
+dates_str = [d.strftime('%Y-%m-%d') for d in ts_data.index]
 
-print(ci.summary())
-ci.plot()
-plt.show()
+cv = robjects.default_converter + pandas2ri.converter
+with localconverter(cv):
+    ts_reset = ts_data.reset_index(drop=True)
+    r_df = pandas2ri.py2rpy(ts_reset)
+    
+    robjects.globalenv['py_data'] = r_df
+    robjects.globalenv['dates_str'] = robjects.StrVector(dates_str)
+    robjects.globalenv['pre_start'] = pre_period_start
+    robjects.globalenv['pre_end'] = pre_period_end
+    robjects.globalenv['post_start'] = post_period_start
+    robjects.globalenv['post_end'] = post_period_end
+
+    robjects.r('''
+    library(zoo)
+    library(CausalImpact)
+    
+    time_points <- as.Date(dates_str)
+    
+    if (ncol(py_data) == 1) {
+        z_data <- zoo(as.numeric(py_data[[1]]), time_points)
+    } else {
+        mat <- data.matrix(py_data)
+        z_data <- zoo(mat, time_points)
+    }
+    
+    pre.period <- as.Date(c(pre_start, pre_end))
+    post.period <- as.Date(c(post_start, post_end))
+    
+    impact <- CausalImpact(z_data, pre.period, post.period)
+    
+    print(summary(impact))
+    # plot(impact) # Uncomment to view the plot in an R graphics device if configured
+    ''')
 """
         return script
-
+    
     # --- Time Series Logic Injection in Script ---
     if ts_params and ts_params.get('enabled'):
         date_col = ts_params['date_col']
@@ -982,9 +998,15 @@ def prepare_time_series(df, date_col, outcome_col, unit_col=None, treated_unit=N
 
 def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, unit_col=None, treated_unit=None, use_panel=False, covariates=None):
     """
-    Runs CausalImpact analysis.
+    Runs CausalImpact analysis using the original R package via rpy2.
     df: User-level dataframe (will be aggregated) or Pre-aggregated.
     """
+    import rpy2.robjects as robjects
+    from rpy2.robjects.packages import importr
+    from rpy2.robjects import pandas2ri
+    from rpy2.robjects.conversion import localconverter
+    import time
+
     try:
         # Aggregation
         ts_data = prepare_time_series(df, date_col, outcome_col, unit_col, treated_unit, use_panel, covariates)
@@ -1003,53 +1025,111 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
         if intervention_date <= min_date or intervention_date >= max_date:
             return {'error': f"Intervention date {intervention_date.date()} is outside data range ({min_date.date()} to {max_date.date()})."}
 
-        pre_period = [pd.to_datetime(min_date), pd.to_datetime(intervention_date) - pd.Timedelta(days=1)]
-        post_period = [pd.to_datetime(intervention_date), pd.to_datetime(max_date)]
+        pre_end = intervention_date - pd.Timedelta(days=1)
         
-        try:
-            ci = CausalImpact(ts_data, pre_period, post_period)
-        except KeyError:
-             # Fallback: Reset index to integer range, keep dates for reference
-             ts_data_reset = ts_data.reset_index(drop=True)
-             
-             # Also Rename Columns to Integers to avoid KeyError: 0 in mu[0] if library assumes int indexing
-             # Save original names to map back later if needed (though summary/plot might just show 0,1,2)
-             original_cols = ts_data_reset.columns
-             ts_data_reset.columns = range(len(ts_data_reset.columns))
-             
-             # Map periods to integer indices
-             # min_date is index 0
-             # intervention_idx = location of intervention_date
-             loc_idx = ts_data.index.get_loc(intervention_date)
-             if isinstance(loc_idx, slice):
-                 loc_idx = loc_idx.start
-             elif isinstance(loc_idx, np.ndarray): # Boolean array
-                 loc_idx = np.where(loc_idx)[0][0]
-                 
-             # pre_period indices
-             pre_idx = [0, loc_idx - 1]
-             post_idx = [loc_idx, len(ts_data)-1]
-             
-             ci = CausalImpact(ts_data_reset, pre_idx, post_idx)
-        
-        # Extract Summary
-        summary = ci.summary()
-        report = ci.summary(output='report')
-        
+        cv = robjects.default_converter + pandas2ri.converter
+        with localconverter(cv):
+            try:
+                base = importr('base')
+                zoo = importr('zoo')
+                ci_pkg = importr('CausalImpact')
+                grdevices = importr('grDevices')
+            except Exception as e:
+                return {"error": f"Failed to load R CausalImpact or zoo package. Ensure they are installed via Rscript. Details: {e}"}
+
+            # Prepare data for R: Zoo objects need a data matrix and a time index
+            # ts_data index is datetime, columns are y (outcome) then covariates (if any)
+            # We pass the index as strings to r, then parse inside
+            dates_str = [d.strftime('%Y-%m-%d') for d in ts_data.index]
+            
+            # Pass DataFrame to R
+            # resetting index so rpy2 can convert safely, we'll reapply zoo index in R
+            ts_reset = ts_data.reset_index(drop=True)
+            r_df = pandas2ri.py2rpy(ts_reset)
+            
+            robjects.globalenv['py_data'] = r_df
+            robjects.globalenv['dates_str'] = robjects.StrVector(dates_str)
+            robjects.globalenv['pre_start'] = min_date.strftime('%Y-%m-%d')
+            robjects.globalenv['pre_end'] = pre_end.strftime('%Y-%m-%d')
+            robjects.globalenv['post_start'] = intervention_date.strftime('%Y-%m-%d')
+            robjects.globalenv['post_end'] = max_date.strftime('%Y-%m-%d')
+            
+            timestamp = int(time.time())
+            plot_file = f"causalimpact_plot_{timestamp}.png"
+            robjects.globalenv['plot_path'] = plot_file
+
+            robjects.r("""
+            # 1. Create zoo object
+            time_points <- as.Date(dates_str)
+            
+            # If py_data only has 1 column, it's just a vector, otherwise a matrix
+            if (ncol(py_data) == 1) {
+                # Ensure it's a numeric vector
+                z_data <- zoo(as.numeric(py_data[[1]]), time_points)
+            } else {
+                # Convert all to numeric matrix, first column must be Y
+                mat <- data.matrix(py_data)
+                z_data <- zoo(mat, time_points)
+            }
+            
+            # 2. Define periods
+            pre.period <- as.Date(c(pre_start, pre_end))
+            post.period <- as.Date(c(post_start, post_end))
+            
+            # 3. Run CausalImpact
+            impact <- CausalImpact(z_data, pre.period, post.period)
+            
+            # 4. Extract metrics from summary
+            sum_data <- impact$summary
+            rel_effect <- sum_data$RelEffect[1] # Average Relative Effect
+            
+            p_val <- impact$summary$p[1]
+            
+            # Extract Average Effect
+            ate <- sum_data$AbsEffect[1]
+            ate_lower <- sum_data$AbsEffect.lower[1]
+            ate_upper <- sum_data$AbsEffect.upper[1]
+            
+            # Extract Cumulative Effect (second row)
+            cum <- sum_data$AbsEffect[2]
+            cum_lower <- sum_data$AbsEffect.lower[2]
+            cum_upper <- sum_data$AbsEffect.upper[2]
+            
+            report_text <- impact$report
+            
+            # 5. Generate Plot
+            png(plot_path, width=800, height=600, res=100)
+            print(plot(impact))
+            dev.off()
+            """)
+            
+            # Retrieve values from R ecosystem
+            p_val = robjects.r('p_val')[0]
+            ate = robjects.r('ate')[0]
+            ate_lower = robjects.r('ate_lower')[0]
+            ate_upper = robjects.r('ate_upper')[0]
+            cum = robjects.r('cum')[0]
+            cum_lower = robjects.r('cum_lower')[0]
+            cum_upper = robjects.r('cum_upper')[0]
+            rel_effect = robjects.r('rel_effect')[0]
+            
+            # report_text in R might be a vector of strings depending on print method, we'll try to join it
+            report_r = robjects.r('report_text')
+            report_str = "\n".join(report_r) if hasattr(report_r, '__iter__') and not isinstance(report_r, str) else str(report_r)
+
         return {
-            'object': ci, # Return object for plotting
-            'summary': summary,
-            'report': report,
-            'p_value': ci.p_value,
-            'ate': ci.summary_data.loc['abs_effect', 'average'],
-            'ate_lower': ci.summary_data.loc['abs_effect_lower', 'average'],
-            'ate_upper': ci.summary_data.loc['abs_effect_upper', 'average'],
-            'cumulative_abs': ci.summary_data.loc['abs_effect', 'cumulative'],
-            'cumulative_lower': ci.summary_data.loc['abs_effect_lower', 'cumulative'],
-            'cumulative_upper': ci.summary_data.loc['abs_effect_upper', 'cumulative'],
-            # Relative Effect (Lift)
-            'relative_effect': ci.summary_data.loc['rel_effect', 'average'],
-             # summary_data keys: actual, predicted, abs_effect, rel_effect
+            'object': None, # No python object anymore
+            'plot_path': plot_file,
+            'summary': "R CausalImpact model summarized below.",
+            'report': report_str,
+            'p_value': p_val,
+            'ate': ate,
+            'ate_lower': ate_lower,
+            'ate_upper': ate_upper,
+            'cumulative_abs': cum,
+            'cumulative_lower': cum_lower,
+            'cumulative_upper': cum_upper,
+            'relative_effect': rel_effect
         }
 
     except Exception as e:
@@ -1059,7 +1139,7 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
 
 def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, intervention_date, 
                           treatment_duration=14, model="none", alpha=0.1, 
-                          confidence_intervals=False, stat_test="Total"):
+                          confidence_intervals=False, stat_test="Total", covariates=None):
     """
     Runs GeoLift Analysis using rpy2 to bridge Python and Meta's GeoLift R package.
     """
@@ -1080,12 +1160,19 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             except Exception as e:
                 return {"error": f"Failed to load R GeoLift package. Ensure it is installed via Rscript. Details: {e}"}
 
-            df_clean = df[[date_col, geo_col, kpi_col]].copy()
+            cols_to_keep = [date_col, geo_col, kpi_col]
+            if covariates:
+                cols_to_keep += covariates
+                
+            df_clean = df[cols_to_keep].copy()
             df_clean = df_clean.dropna()
             
             # Convert dates to string format expected by R GeoDataRead
             df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.strftime('%Y-%m-%d')
             df_clean[kpi_col] = pd.to_numeric(df_clean[kpi_col])
+            if covariates:
+                 for c in covariates:
+                     df_clean[c] = pd.to_numeric(df_clean[c])
             
             # Pass DataFrame to R
             r_df = pandas2ri.py2rpy(df_clean)
@@ -1104,6 +1191,11 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             robjects.globalenv['calc_ci'] = bool(confidence_intervals)
             robjects.globalenv['test_stat'] = stat_test
             
+            if covariates:
+                robjects.globalenv['cov_names'] = robjects.StrVector(covariates)
+            else:
+                robjects.globalenv['cov_names'] = robjects.NULL
+            
             robjects.r("""
             # 1. Map dates to indices BEFORE GeoDataRead drops the date column
             # GeoDataRead maps the chronological order of sorted unique dates to 1..N
@@ -1119,11 +1211,20 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             treatment_start_idx <- match_idx[1]
             
             # 2. Convert the dataframe for GeoLift
-            geo_data <- GeoDataRead(data = py_data,
-                                    date_id = time_id,
-                                    location_id = geo_id,
-                                    Y_id = Y_id,
-                                    format = "yyyy-mm-dd")
+            if (is.null(cov_names)) {
+                geo_data <- GeoDataRead(data = py_data,
+                                        date_id = time_id,
+                                        location_id = geo_id,
+                                        Y_id = Y_id,
+                                        format = "yyyy-mm-dd")
+            } else {
+                geo_data <- GeoDataRead(data = py_data,
+                                        date_id = time_id,
+                                        location_id = geo_id,
+                                        Y_id = Y_id,
+                                        X = cov_names,
+                                        format = "yyyy-mm-dd")
+            }
             
             # 3. Calculate end index based on duration
             max_time <- max(geo_data$time)
@@ -1134,17 +1235,32 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             }
             
             # 4. Run GeoLift
-            gl_res <- GeoLift(Y_id = "Y",
-                              time_id = "time",
-                              location_id = "location",
-                              data = geo_data,
-                              locations = treated_locs,
-                              treatment_start_time = treatment_start_idx,
-                              treatment_end_time = treatment_end_idx,
-                              model = model_name,
-                              alpha = alpha_val,
-                              ConfidenceIntervals = calc_ci,
-                              stat_test = test_stat)
+            if (is.null(cov_names)) {
+                gl_res <- GeoLift(Y_id = "Y",
+                                  time_id = "time",
+                                  location_id = "location",
+                                  data = geo_data,
+                                  locations = treated_locs,
+                                  treatment_start_time = treatment_start_idx,
+                                  treatment_end_time = treatment_end_idx,
+                                  model = model_name,
+                                  alpha = alpha_val,
+                                  ConfidenceIntervals = calc_ci,
+                                  stat_test = test_stat)
+            } else {
+                gl_res <- GeoLift(Y_id = "Y",
+                                  time_id = "time",
+                                  location_id = "location",
+                                  X = cov_names,
+                                  data = geo_data,
+                                  locations = treated_locs,
+                                  treatment_start_time = treatment_start_idx,
+                                  treatment_end_time = treatment_end_idx,
+                                  model = model_name,
+                                  alpha = alpha_val,
+                                  ConfidenceIntervals = calc_ci,
+                                  stat_test = test_stat)
+            }
                               
             summary_res <- summary(gl_res)
             """)
@@ -1230,7 +1346,7 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
 
 def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cutoff_date=None, 
                       n_markets="1", lookback_window=1, model="none", alpha=0.1, side_of_test="two_sided",
-                      parallel=True, ns=1000, effect_size_mode="Full", normalize=False):
+                      parallel=True, ns=1000, effect_size_mode="Full", normalize=False, covariates=None):
     """
     Runs GeoLift Market Selection (Power Analysis) via rpy2 with performance optimizations.
     """
@@ -1253,7 +1369,11 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
             except Exception as e:
                 return {"error": f"Failed to load R GeoLift package. Details: {e}"}
 
-            df_clean = df[[date_col, geo_col, kpi_col]].copy()
+            cols_to_keep = [date_col, geo_col, kpi_col]
+            if covariates:
+                cols_to_keep += covariates
+                
+            df_clean = df[cols_to_keep].copy()
             
             # Application of historical cutoff if provided
             if cutoff_date:
@@ -1263,6 +1383,10 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
             df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.strftime('%Y-%m-%d')
             df_clean[kpi_col] = pd.to_numeric(df_clean[kpi_col])
             
+            if covariates:
+                for c in covariates:
+                    df_clean[c] = pd.to_numeric(df_clean[c])
+            
             # Pass DataFrame to R
             r_df = pandas2ri.py2rpy(df_clean)
                 
@@ -1271,12 +1395,26 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
             robjects.globalenv['geo_col_name'] = geo_col
             robjects.globalenv['kpi_col_name'] = kpi_col
             
+            if covariates:
+                robjects.globalenv['cov_names'] = robjects.StrVector(covariates)
+            else:
+                robjects.globalenv['cov_names'] = robjects.NULL
+            
             robjects.r("""
-            geo_data <- GeoDataRead(data = py_data,
-                                    date_id = date_col_name,
-                                    location_id = geo_col_name,
-                                    Y_id = kpi_col_name,
-                                    format = "yyyy-mm-dd")
+            if (is.null(cov_names)) {
+                geo_data <- GeoDataRead(data = py_data,
+                                        date_id = date_col_name,
+                                        location_id = geo_col_name,
+                                        Y_id = kpi_col_name,
+                                        format = "yyyy-mm-dd")
+            } else {
+                geo_data <- GeoDataRead(data = py_data,
+                                        date_id = date_col_name,
+                                        location_id = geo_col_name,
+                                        Y_id = kpi_col_name,
+                                        X = cov_names,
+                                        format = "yyyy-mm-dd")
+            }
             """)
             
             # Parameters
@@ -1310,25 +1448,48 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
 
             robjects.r("""
             # Market Selection searches for the best test markets
-            market_selection <- GeoLiftMarketSelection(
-                data = geo_data,
-                treatment_periods = duration,
-                N = n_markets_vec,
-                Y_id = "Y",
-                location_id = "location",
-                time_id = "time",
-                lookback_window = lookback,
-                model = model_name,
-                alpha = alpha_val,
-                side_of_test = side,
-                parallel = parallel_run,
-                parallel_setup = "parallel", # Use multitasking on Mac
-                ns = ns_val,
-                normalize = normalize_val,
-                effect_size = es_sequence,
-                ProgressBar = FALSE,
-                print = FALSE
-            )
+            if (is.null(cov_names)) {
+                market_selection <- GeoLiftMarketSelection(
+                    data = geo_data,
+                    treatment_periods = duration,
+                    N = n_markets_vec,
+                    Y_id = "Y",
+                    location_id = "location",
+                    time_id = "time",
+                    lookback_window = lookback,
+                    model = model_name,
+                    alpha = alpha_val,
+                    side_of_test = side,
+                    parallel = parallel_run,
+                    parallel_setup = "parallel", # Use multitasking on Mac
+                    ns = ns_val,
+                    normalize = normalize_val,
+                    effect_size = es_sequence,
+                    ProgressBar = FALSE,
+                    print = FALSE
+                )
+            } else {
+                market_selection <- GeoLiftMarketSelection(
+                    data = geo_data,
+                    treatment_periods = duration,
+                    N = n_markets_vec,
+                    Y_id = "Y",
+                    location_id = "location",
+                    time_id = "time",
+                    X = cov_names,
+                    lookback_window = lookback,
+                    model = model_name,
+                    alpha = alpha_val,
+                    side_of_test = side,
+                    parallel = parallel_run,
+                    parallel_setup = "parallel", # Use multitasking on Mac
+                    ns = ns_val,
+                    normalize = normalize_val,
+                    effect_size = es_sequence,
+                    ProgressBar = FALSE,
+                    print = FALSE
+                )
+            }
             
             # Capture the best markets table
             # Strip custom classes to ensure smooth R->Python conversion

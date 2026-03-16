@@ -164,6 +164,9 @@ def simulate_bsts_demo_data():
         region_df = pd.DataFrame({
             'Date': pd.to_datetime(date_range).floor('D'), 'Region': region, 'Daily_Revenue': metric,
             'Marketing_Spend': np.random.normal(50, 5, total_days),
+            'App_Downloads': np.random.poisson(500, total_days) + (regional_trend).astype(int),
+            'Website_Traffic': np.random.normal(5000, 500, total_days) + regional_trend * 10,
+            'Social_Media_Mentions': np.random.poisson(100, total_days) + (regional_trend / 2).astype(int),
             'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
             'Is_Treated_Region': 1 if region == 'North' else 0
         })
@@ -2257,9 +2260,17 @@ with tab_quasi:
             with col_p1:
                 power_date = st.selectbox("Date Column", df.columns, index=get_index(df.columns, 'Date', 0), key="pow_date")
                 power_geo = st.selectbox("Geography/Location Column", df.columns, index=get_index(df.columns, 'Region', 1), key="pow_geo")
+                
+                # Predictor/Covariate extraction excluding identifiers (added default calculation for covariates)
+                available_covariates_geo = [c for c in df.columns if c not in [power_date, power_geo]]
+                pow_covariates = st.multiselect("Covariates (Optional)", available_covariates_geo, help="Select additional features to improve Synthetic Control fit.", key="pow_cov")
+                
             with col_p2:
                 num_cols = df.select_dtypes(include=[np.number]).columns
-                power_kpi = st.selectbox("Outcome Column", num_cols, index=get_index(num_cols, 'KPI', 0) if len(num_cols) > 0 else 0, key="pow_kpi")
+                
+                # Dynamic filter to prevent KPI from being a covariate and vice versa
+                kpi_options = [c for c in num_cols if c not in pow_covariates]
+                power_kpi = st.selectbox("Outcome Column", kpi_options, index=get_index(kpi_options, 'KPI', 0) if len(kpi_options) > 0 else 0, key="pow_kpi")
             
             power_duration = st.number_input("Expected Treatment Duration (Days)", min_value=1, value=14, key="pow_dur", help="How long do you expect the marketing test to run?")
             
@@ -2293,7 +2304,7 @@ with tab_quasi:
                 
                 pow_n_markets = st.text_input("Number of Test Markets (comma-separated)", value="1", help="e.g. '1' to test single regions, or '1, 2' to test groups of 1 and 2.")
                 pow_lookback = st.number_input("Lookback Window", min_value=1, value=1, help="Number of historical samples. Set to 1 for fast iteration, 5+ for final decisions.")
-                pow_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN"], index=0, help="'Ridge' is recommended for small panels, 'GSYN' for large panels.")
+                pow_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN", "best"], index=0, help="'Ridge' is recommended for small panels, 'GSYN' for large panels, and 'best' will test all and return the optimal model.")
                 pow_alpha = st.slider("Significance Level (Alpha)", 0.01, 0.2, 0.1, help="Standard is 0.1 for GeoLift.")
                 pow_side = st.selectbox("Side of Test", ["two_sided", "one_sided"], index=0)
                 pow_parallel = st.checkbox("Enable Parallel Processing", value=True, help="Uses multiple CPU cores to speed up simulations.")
@@ -2323,8 +2334,9 @@ with tab_quasi:
                             side_of_test=pow_side,
                             parallel=pow_parallel,
                             ns=pow_ns,
-                            effect_size_mode="Fast" if "Fast" in pow_es_mode else "Full",
-                            normalize=pow_normalize
+                            effect_size_mode=pow_es_mode.split()[0], # "Fast" or "Full",
+                            normalize=pow_normalize,
+                            covariates=pow_covariates
                         )
                         
                         st.session_state.quasi_results = {
@@ -2342,9 +2354,16 @@ with tab_quasi:
             with col_g1:
                 geo_lift_date = st.selectbox("Date Column", df.columns, index=get_index(df.columns, 'Date', 0), key="gl_date")
                 geo_lift_geo = st.selectbox("Geography/Location Column", df.columns, index=get_index(df.columns, 'Region', 1), key="gl_geo")
+                
+                # Predictor/Covariate extraction excluding identifiers
+                available_covariates = [c for c in df.columns if c not in [geo_lift_date, geo_lift_geo]]
+                est_covariates = st.multiselect("Covariates (Optional)", available_covariates, help="Select additional features to improve Synthetic Control fit.", key="est_cov")
+                
             with col_g2:
                 num_cols = df.select_dtypes(include=[np.number]).columns
-                geo_lift_kpi = st.selectbox("Outcome Column", num_cols, index=get_index(num_cols, 'KPI', 0) if len(num_cols) > 0 else 0, key="gl_kpi")
+                
+                kpi_est_options = [c for c in num_cols if c not in est_covariates]
+                geo_lift_kpi = st.selectbox("Outcome Column", kpi_est_options, index=get_index(kpi_est_options, 'KPI', 0) if len(kpi_est_options) > 0 else 0, key="gl_kpi")
                 
                 treated_geo_options = []
                 if geo_lift_geo in df.columns:
@@ -2368,7 +2387,7 @@ with tab_quasi:
             geo_lift_duration = st.number_input("Treatment Duration (Days)", min_value=1, value=14, key="gl_dur2")
 
             with st.expander("Estimation Configuration"):
-                est_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN"], index=0, key="gl_model_est")
+                est_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN", "best"], index=0, key="gl_model_est")
                 est_alpha = st.slider("Significance Level (Alpha)", 0.01, 0.2, 0.1, help="Threshold for statistical significance.", key="gl_alpha_est")
                 est_ci = st.checkbox("Calculate Confidence Intervals", value=False, help="Adds uncertainty estimation but increases runtime.", key="gl_ci_est")
                 est_test = st.selectbox("Statistical Test", ["Total", "Negative", "Positive"], index=0, help="'Total' is standard for overall lift.", key="gl_test_est")
@@ -2384,7 +2403,8 @@ with tab_quasi:
                             model=est_model,
                             alpha=est_alpha,
                             confidence_intervals=est_ci,
-                            stat_test=est_test
+                            stat_test=est_test,
+                            covariates=est_covariates
                         )
                         st.session_state.quasi_results = {
                             'method': 'GeoLift (Synthetic Control via R)',
@@ -2508,13 +2528,10 @@ with tab_quasi:
             
             # Plotting
             st.subheader("Visualization")
-            ci_obj = results['object']
             try:
-                ci_obj.plot()
-                st.pyplot(plt.gcf())
-                plt.clf()
+                st.image(results['plot_path'], caption="CausalImpact Results: Original, Pointwise, and Cumulative", use_container_width=True)
             except Exception as e:
-                st.warning(f"Could not render plot: {e}")
+                st.warning(f"Could not render plot from R: {e}")
 
         elif quasi_method_run == "GeoLift Power Analysis (Market Selection)":
             st.divider()
@@ -2528,8 +2545,9 @@ with tab_quasi:
                 **Methodology (Market Selection & Power Analysis):**
                 GeoLift's Market Selection uses historical data to identify the best candidate markets for an experiment. It evaluates possible treated units by checking their pre-treatment fit (using Synthetic Control) and their statistical power (calculating the Minimum Detectable Effect).
                 
-                *Methodology References:* 
+                **Methodology References:**
                 - Augmented Synthetic Control Method (*Ben-Michael, Feller, and Roth, 2021*)
+                - Generalized Synthetic Control Method (GSYN) (*Yiqing Xu, 2017*)
                 - Meta Open Source GeoLift implementation (*Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023*)
                 
                 **Augmentation Models**:

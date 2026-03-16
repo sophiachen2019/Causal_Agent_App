@@ -7,10 +7,10 @@ scikit-learn
 matplotlib
 google-genai
 statsmodels
-pycausalimpact
 rpy2
 
 # --- Metadata ---
+# Release: 4.1.0 | 2026-03-15 | Added covariate support for GeoLift models and migrated CausalImpact to the official R implementation for greater accuracy.
 # Release: 4.0.0 | 2026-03-14 | Added GeoLift (Synthetic Control via R) for Market Selection and Impact Estimation.
 # Release: 3.2.0 | 2026-02-11 | Refined data summary and chart builder features; Enabled covariates for BSTS.
 # Release: 3.1.0 | 2026-02-06 | Added methodology references and simulated data for BSTS.

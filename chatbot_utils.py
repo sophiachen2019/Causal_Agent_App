@@ -68,6 +68,112 @@ def get_app_context():
        - Every analysis in Tab 3 and Tab 4 has a "Data & Script Export" section to download CSV results and a Python reproduction script.
     """
 
+import causal_utils
+import numpy as np
+
+def run_observational_analysis(treatment: str, outcome: str, confounders: list[str], method_name: str, is_binary_outcome: bool = False) -> str:
+    """
+    Runs an observational causal analysis (like OLS, PSM, LinearDML) on the currently loaded data.
+    """
+    if 'df' not in st.session_state or st.session_state.df is None:
+        return "Error: No dataset loaded in the application."
+    df = st.session_state.df
+    
+    # Map friendly names to actual method names expected by causal_utils
+    # Valid methods: "Linear/Logistic Regression (OLS/Logit)", "Propensity Score Matching (PSM)", "Inverse Propensity Weighting (IPTW)", "Linear Double Machine Learning (LinearDML)", "Generalized Random Forests (CausalForestDML)", "Meta-Learner: S-Learner", "Meta-Learner: T-Learner"
+    valid_methods = [
+        "Linear/Logistic Regression (OLS/Logit)", "Propensity Score Matching (PSM)",
+        "Inverse Propensity Weighting (IPTW)", "Linear Double Machine Learning (LinearDML)",
+        "Generalized Random Forests (CausalForestDML)", "Meta-Learner: S-Learner", "Meta-Learner: T-Learner"
+    ]
+    # Simple fuzzy match or let LLM pass exact strings
+    if method_name not in valid_methods:
+        # try to fallback
+        if "OLS" in method_name or "Linear" in method_name and "DML" not in method_name: method_name = "Linear/Logistic Regression (OLS/Logit)"
+        elif "PSM" in method_name: method_name = "Propensity Score Matching (PSM)"
+        elif "IPTW" in method_name: method_name = "Inverse Propensity Weighting (IPTW)"
+        elif "LinearDML" in method_name: method_name = "Linear Double Machine Learning (LinearDML)"
+        elif "CausalForest" in method_name: method_name = "Generalized Random Forests (CausalForestDML)"
+        elif "S-Learner" in method_name: method_name = "Meta-Learner: S-Learner"
+        elif "T-Learner" in method_name: method_name = "Meta-Learner: T-Learner"
+        else: return f"Error: '{method_name}' is not a valid method. Choose from {valid_methods}"
+
+    try:
+        ate, ci_lower, ci_upper = causal_utils.calculate_period_effect(df, treatment, outcome, confounders, method_name, is_binary_outcome)
+        if np.isnan(ate):
+            return "Estimation failed. Check if confounders are valid and variance exists."
+        
+        return f"Observational Analysis ({method_name}) Results:\\nATE (Average Treatment Effect): {ate:.4f}\\n95% CI: [{ci_lower:.4f}, {ci_upper:.4f}]"
+    except Exception as e:
+        return f"Error running analysis: {e}"
+
+def run_did_analysis(treatment_col: str, outcome_col: str, time_col: str, confounders: list[str], is_binary_outcome: bool = False, use_logit: bool = False) -> str:
+    """
+    Runs a Difference-in-Differences (DiD) Analysis manually using OLS/Logit interaction.
+    Assumptions: The 'time_col' should be a binary period indicator (0=Pre, 1=Post).
+    """
+    if 'df' not in st.session_state or st.session_state.df is None:
+        return "Error: No dataset loaded."
+    df = st.session_state.df
+    
+    try:
+        res = causal_utils.run_did_analysis(df, treatment_col, outcome_col, time_col, confounders, is_binary_outcome, use_logit)
+        if 'error' in res:
+            return f"Error: {res['error']}"
+        
+        output = f"DiD Analysis ({res['method']}) Results:\\n"
+        output += f"Interaction Coefficient (DiD Estimate): {res['coefficient']:.4f}\\n"
+        output += f"P-Value: {res['p_value']:.4f}\\n"
+        output += f"95% CI: [{res['ci_lower']:.4f}, {res['ci_upper']:.4f}]\\n"
+        if 'odds_ratio' in res:
+             output += f"Odds Ratio: {res['odds_ratio']:.4f}\\n"
+             
+        return output
+    except Exception as e:
+        return f"Error running DiD: {e}"
+
+def run_time_series_bsts(date_col: str, outcome_col: str, intervention_date: str, unit_col: str = None, treated_unit: str = None, use_panel: bool = False, covariates: list[str] = None) -> str:
+    """
+    Runs CausalImpact (BSTS) analysis on time series data. Best for single unit testing or panel data.
+    intervention_date must be YYYY-MM-DD.
+    """
+    if 'df' not in st.session_state or st.session_state.df is None:
+        return "Error: No dataset loaded."
+    df = st.session_state.df
+    
+    try:
+        res = causal_utils.run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, unit_col, treated_unit, use_panel, covariates)
+        if 'error' in res:
+            return f"Error processing CausalImpact: {res['error']}"
+        
+        output = "BSTS (CausalImpact) Analysis Results:\\n"
+        output += f"P-Value: {res['p_value']:.4f}\\n"
+        output += f"Average Absolute Effect (Lift): {res['ate']:.2f} (95% CI: [{res['ate_lower']:.2f}, {res['ate_upper']:.2f}])\\n"
+        output += f"Relative Effect: {res['relative_effect']:.2%}\\n"
+        output += f"Cumulative Absolute Effect: {res['cumulative_abs']:.2f} (95% CI: [{res['cumulative_lower']:.2f}, {res['cumulative_upper']:.2f}])"
+        return output
+    except Exception as e:
+         return f"Error running BSTS: {e}"
+
+def run_synthetic_control_geolift(date_col: str, geo_col: str, treated_geo: str, kpi_col: str, intervention_date: str, treatment_duration: int, covariates: list[str] = None) -> str:
+    """
+    Runs GeoLift (Synthetic Control via R) on Panel Data. Best for geographic switchback or A/B testing where a market is treated.
+    intervention_date must be YYYY-MM-DD.
+    """
+    if 'df' not in st.session_state or st.session_state.df is None:
+        return "Error: No dataset loaded."
+    df = st.session_state.df
+    
+    try:
+        res = causal_utils.run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, intervention_date, treatment_duration=treatment_duration, covariates=covariates)
+        if 'error' in res:
+            return f"Error in GeoLift: {res['error']}"
+        
+        return res['summary'] # Comes properly formatted in Markdown
+    except Exception as e:
+        return f"Error running GeoLift: {e}"
+
+
 def chat_stream(model_name, messages, data_context, app_context, api_key):
     """
     Streams response from Gemini model using the new google.genai SDK.
@@ -77,12 +183,13 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     You are an expert Causal Inference Statistician and Data Scientist assistant embedded in the "Causal Inference Agent" application.
     
     Your goals:
-    1. Help users understand the dataset and identify the right columns for analysis.
+    1. Help users understand the currently loaded dataset and identify the right columns for analysis.
     2. Suggest appropriate causal models based on data structure:
        - If they have cross-sectional data (one row per user), suggest **Observational Analysis (Tab 3)**.
        - If they have longitudinal/time-series data (multiple timestamps), suggest **Quasi-Experimental Analysis (Tab 4)** and refer to methods like DiD or CausalImpact.
-    3. Explain causal concepts (ATE, HTE, Confounding, Instrumental Variables, Regression Discontinuity, etc.) and interpret specific methods whether they are available in the app (like OLS, Logit, PSM, IPTW, LinearDML, CausalForestDML, Meta-Learners, DiD, BSTS/CausalImpact) or not.
-    4. Provide expert advice on causal inference methodology, experimental design, and statistical theory, even if the user asks about methods not currently implemented in the application.
+    3. You have TOOLS available to directly run causal inference methods on the CURRENTLY LOADED dataset. When a user asks you to "Run an analysis", use your tools and provide the results. 
+       - If the user's request is ambiguous about parameters (e.g. they don't specify confounders), make a reasonable Data Science assumption based on the dataset columns, or clarify with them.
+    4. Explain causal concepts (ATE, HTE, Confounding, Instrumental Variables, Regression Discontinuity, etc.) and interpret the statistical results you generate using your tools.
     5. Guide them to the correct UI Tab when applicable.
     6. Mention the "Results Interpretation" guides in the **User Guide (Tab 1)** for interpreting statistical metrics like P-values, Confidence Intervals, and Relative Lift.
 
@@ -90,13 +197,13 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     --- APP CONTEXT ---
     {app_context}
     
-    --- CURRENT DATASET ---
+    --- CURRENT LOADED DATASET ---
     {data_context}
     
     Instructions:
     - Be concise and professional.
     - Use markdown (bold, tables, lists) to improve readability.
-    - When suggesting variables, strictly refer to the columns present in the 'CURRENT DATASET'.
+    - When suggesting variables or running tools, STRICTLY refer to the columns present in the 'CURRENT LOADED DATASET'.
     - If the user asks for code, provide Python code compatible with the libraries used (pandas, econml, dowhy, causalimpact, statsmodels, etc.).
     - You are encouraged to answer general causal inference questions, not just those related to the app's current functionality.
     """
@@ -116,7 +223,8 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
-        temperature=0.7
+        temperature=0.7,
+        tools=[run_observational_analysis, run_did_analysis, run_time_series_bsts, run_synthetic_control_geolift]
     )
 
     # Convert messages
@@ -130,6 +238,10 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     
     for msg in history_messages:
         role = "user" if msg["role"] == "user" else "model"
+        
+        # Streamlit message formatting handling for tool calls
+        # The new SDK handles function calling via normal parts.
+        # Simple extraction of text
         formatted_history.append(types.Content(
             role=role,
             parts=[types.Part.from_text(text=msg["content"])]
@@ -144,4 +256,6 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     response_stream = chat.send_message_stream(current_message)
     
     for chunk in response_stream:
+        # We can just yield the chunk text directly for Streamlit, the SDK handles function execution internally
+        # if the python functions are passed.
         yield chunk
