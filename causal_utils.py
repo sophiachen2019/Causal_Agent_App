@@ -9,7 +9,6 @@ from sklearn.preprocessing import StandardScaler
 from econml.dml import LinearDML, CausalForestDML
 from econml.metalearners import SLearner, TLearner
 import streamlit as st
-from causalimpact import CausalImpact
 import statsmodels.api as sm
 
 # Monkey patch for compatibility with Pandas 2.1+ / 3.0 where applymap is removed
@@ -34,7 +33,6 @@ from econml.dml import LinearDML, CausalForestDML
 from econml.metalearners import SLearner, TLearner
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
-from causalimpact import CausalImpact
 
 # --- 1. Load Data ---
 """
