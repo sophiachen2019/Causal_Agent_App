@@ -42,7 +42,7 @@ import statsmodels.api as sm
 def simulate_bsts_demo_data():
     \"\"\"Generates multi-region time series data for BSTS demo.\"\"\"
     np.random.seed(42)
-    regions = ['North', 'South', 'East', 'West']
+    regions = [f'Region_{i}' for i in range(1, 41)]
     total_days = 400
     start_date = pd.to_datetime('2023-01-01')
     date_range = pd.date_range(start=start_date, periods=total_days)
@@ -53,12 +53,13 @@ def simulate_bsts_demo_data():
     monthly_seasonality = 20 * np.sin(2 * np.pi * np.arange(total_days) / 30)
     
     for region in regions:
-        regional_trend = global_trend + np.random.normal(0, 10)
+        base_offset = 40 if region == 'Region_1' else np.random.normal(0, 10)
+        regional_trend = global_trend + base_offset
         noise = np.random.normal(0, 5, total_days)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
         
         intervention_day = 300
-        if region == 'North':
+        if region == 'Region_1':
             lift = np.zeros(total_days)
             lift[intervention_day:] = 30 + np.cumsum(np.random.normal(0.5, 0.1, total_days - intervention_day))
             metric += lift
@@ -67,7 +68,7 @@ def simulate_bsts_demo_data():
             'Date': date_range, 'Region': region, 'Daily_Revenue': metric,
             'Marketing_Spend': np.random.normal(50, 5, total_days),
             'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
-            'Is_Treated_Region': 1 if region == 'North' else 0
+            'Is_Treated_Region': 1 if region == 'Region_1' else 0
         })
         data_list.append(region_df)
     return pd.concat(data_list, ignore_index=True)

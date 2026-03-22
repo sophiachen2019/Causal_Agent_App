@@ -129,7 +129,7 @@ def simulate_standard_data(n_samples=1000):
 def simulate_bsts_demo_data():
     """Generates multi-region time series data with a clear intervention for BSTS/Synthetic Control demo."""
     np.random.seed(42)
-    regions = ['North', 'South', 'East', 'West']
+    regions = [f'Region_{i}' for i in range(1, 41)]
     total_days = 400
     start_date = pd.to_datetime('2023-01-01')
     date_range = pd.date_range(start=start_date, periods=total_days)
@@ -142,8 +142,8 @@ def simulate_bsts_demo_data():
     monthly_seasonality = 20 * np.sin(2 * np.pi * np.arange(total_days) / 30)
     
     for region in regions:
-        # Regional variation in trend
-        regional_offset = np.random.normal(0, 10)
+        # Regional variation in trend - Region_1 explicitly elevated out of the convex hull
+        regional_offset = 40 if region == 'Region_1' else np.random.normal(0, 10)
         regional_trend = global_trend + regional_offset
         
         # Noise
@@ -152,10 +152,10 @@ def simulate_bsts_demo_data():
         # Base Metric (e.g. Daily Revenue)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
         
-        # Intervention Effect (Only for North, starting at day 300)
+        # Intervention Effect (Only for Region_1, starting at day 300)
         intervention_day = 300
         
-        if region == 'North':
+        if region == 'Region_1':
             # Add a cumulative lift starting from intervention_day
             lift = np.zeros(total_days)
             lift[intervention_day:] = 30 + np.cumsum(np.random.normal(0.5, 0.1, total_days - intervention_day))
@@ -168,7 +168,7 @@ def simulate_bsts_demo_data():
             'Website_Traffic': np.random.normal(5000, 500, total_days) + regional_trend * 10,
             'Social_Media_Mentions': np.random.poisson(100, total_days) + (regional_trend / 2).astype(int),
             'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
-            'Is_Treated_Region': 1 if region == 'North' else 0
+            'Is_Treated_Region': 1 if region == 'Region_1' else 0
         })
         data_list.append(region_df)
     
@@ -1007,7 +1007,7 @@ with tab_guide:
         - **Log Transformation**: Apply log transform to skewed variables.
         - **Standardization**: Scale variables to mean 0 and variance 1.
         - **Variable Bucketing**: Create categorical bins from numerical variables (e.g., Age Groups).
-        - **Data Filtering**: Filter your dataset based on specific conditions (e.g., Region == 'North').
+        - **Data Filtering**: Filter your dataset based on specific conditions (e.g., Region == 'Region_1').
     - **Exploratory Analysis**:
         - **Data Preview**: View your raw and processed data.
         - **Correlation Matrix**: Analyze relationships between numeric variables.
@@ -2206,7 +2206,7 @@ with tab_quasi:
         ci_treated_unit = None
         if ci_unit_col != "None":
             unique_units = list(df[ci_unit_col].unique())
-            ci_treated_unit = st.selectbox("Select Target/Treated Unit", unique_units, index=get_index(unique_units, "North", 0), help="The specific unit/group to analyze.")
+            ci_treated_unit = st.selectbox("Select Target/Treated Unit", unique_units, index=get_index(unique_units, "Region_1", 0), help="The specific unit/group to analyze.")
         else:
             ci_unit_col = None
             
@@ -2575,7 +2575,7 @@ with tab_quasi:
                     2.  **Lower MDE (Sensitivity)**: Look at the **`Average_MDE`** column. This is the smallest effect size the test can reliably detect. 
                     3.  **Higher Power**: Look at the **`Power`** column. Standard practice is to aim for power $\ge$ 0.8 (80%).
                     
-                    **Note on Locations**: If you see multiple regions listed for a single location (e.g., "North, South"), it means GeoLift recommends testing these regions **together as a cluster** to achieve the required statistical power.
+                    **Note on Locations**: If you see multiple regions listed for a single location (e.g., "Region_1, Region_2"), it means GeoLift recommends testing these regions **together as a cluster** to achieve the required statistical power.
                     """)
                     
                     st.subheader("Diagnostic Plots (#1 Ranked Market)")
