@@ -2389,7 +2389,7 @@ with tab_quasi:
             with st.expander("Estimation Configuration"):
                 est_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN", "best"], index=0, key="gl_model_est")
                 est_alpha = st.slider("Significance Level (Alpha)", 0.01, 0.2, 0.1, help="Threshold for statistical significance.", key="gl_alpha_est")
-                est_ci = st.checkbox("Calculate Confidence Intervals", value=False, help="Adds uncertainty estimation but increases runtime.", key="gl_ci_est")
+                est_ci = st.checkbox("Calculate Confidence Intervals", value=True, help="Adds uncertainty estimation but increases runtime.", key="gl_ci_est")
                 est_test = st.selectbox("Statistical Test", ["Total", "Negative", "Positive"], index=0, help="'Total' is standard for overall lift.", key="gl_test_est")
     
             if st.button("Run GeoLift Analysis", type="primary"):
@@ -2489,42 +2489,24 @@ with tab_quasi:
             st.divider()
 
             st.subheader(f"Results: {quasi_method_run}")
-            # Summary Metrics
-            m1, m2, m3 = st.columns(3)
+            metrics = results.get('metrics', {})
+            if not metrics:
+                st.error("Model did not return valid metrics.")
+            else:
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.metric("Average Effect (ATE)", f"{metrics['ate']:,.2f}", f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}]", delta_color="off")
+                with c2:
+                    st.metric("Cumulative Effect", f"{metrics['cum_abs']:,.2f}", f"95% CI: [{metrics['cum_lower']:,.2f}, {metrics['cum_upper']:,.2f}]", delta_color="off")
+                with c3:
+                    st.metric("Relative Lift", f"{metrics['rel_effect']:+.2%}", f"95% CI: [{metrics['rel_lower']:.2f}%, {metrics['rel_upper']:.2f}%]", delta_color="off")
+                with c4:
+                    sig = metrics['significant']
+                    st.metric("P-Value", f"{metrics['p_value']:.4f}", "Significant" if sig else "Not Significant", delta_color="normal" if sig else "off")
             
-            # Metric 1: Average Abs Effect
-            avg_val = results['ate']
-            try:
-                m1.metric(
-                    "Average Absolute Effect", 
-                    f"{avg_val:,.2f}",
-                    f"95% CI [{results['ate_lower']:,.2f}, {results['ate_upper']:,.2f}]",
-                    delta_color="off"
-                )
-            except:
-                m1.metric("Average Abs Effect", f"{avg_val:,.2f}")
-                
-            # Metric 2: Cumulative Abs Effect
-            cum_val = results['cumulative_abs']
-            try:
-                m2.metric(
-                    "Cumulative Effect",
-                    f"{cum_val:,.2f}",
-                    f"[{results['cumulative_lower']:,.2f}, {results['cumulative_upper']:,.2f}]",
-                    delta_color="off"
-                )
-            except:
-                m2.metric("Cumulative Effect", f"{cum_val:,.2f}")
-                
-            # Metric 3: Relative Effect
-            rel_val = results['relative_effect']
-            m3.metric("Relative Lift", f"{rel_val:+.2%}")
-            
-            st.info(f"**P-value**: {results['p_value']:.4f} (Probability that this effect happened by chance)")
-            
-            st.subheader("Report")
-            with st.expander("Read Detailed Report", expanded=True):
-                st.markdown(results['report'])
+                st.subheader("Report")
+                with st.expander("Read Detailed Report", expanded=False):
+                    st.markdown(results['report'])
             
             # Plotting
             st.subheader("Visualization")
@@ -2630,14 +2612,19 @@ with tab_quasi:
                     metrics = results['result']['metrics']
                     
                     st.subheader("Statistical Summary")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Average Treatment Effect (ATT)", f"{metrics['avg_lift']:,.2f}")
-                    with col2:
-                        st.metric("Cumulative Impact", f"{metrics['cum_lift']:,.2f}")
-                    with col3:
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1:
+                        ci_str = f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}]" if metrics.get('has_ci') else "No CI calculated"
+                        st.metric("Average Effect (ATT)", f"{metrics['avg_lift']:,.2f}", ci_str, delta_color="off")
+                    with c2:
+                        ci_str_cum = f"95% CI: [{metrics['cum_lower']:,.2f}, {metrics['cum_upper']:,.2f}]" if metrics.get('has_ci') else "No CI calculated"
+                        st.metric("Cumulative Impact", f"{metrics['cum_lift']:,.2f}", ci_str_cum, delta_color="off")
+                    with c3:
+                        ci_str_rel = f"95% CI: [{metrics['rel_lower']:.2f}%, {metrics['rel_upper']:.2f}%]" if metrics.get('has_ci') and metrics.get('rel_lower') is not None else "No CI calculated"
+                        st.metric("Relative Lift", f"{metrics['perc_lift']:+.2f}%", ci_str_rel, delta_color="off")
+                    with c4:
                         sig_color = "normal" if metrics['significant'] else "off"
-                        st.metric("P-Value", f"{metrics['p_val']:.4f}", delta="Significant" if metrics['significant'] else "Not Significant", delta_color=sig_color)
+                        st.metric("P-Value", f"{metrics['p_val']:.4f}", "Significant" if metrics['significant'] else "Not Significant", delta_color=sig_color)
                         
                     direction = "increase" if metrics['cum_lift'] > 0 else "decrease"
                     if metrics['significant']:
@@ -2648,6 +2635,9 @@ with tab_quasi:
                         conclusion = f"This indicates that there is insufficient evidence to conclude the intervention had a meaningful impact on **{metrics['treated_geo']}**, as the observed differences fall within the expected noise of the synthetic control."
                         
                     st.info(f"**Interpretation:** During the post-intervention period, the **{metrics['treated_geo']}** market experienced an average estimated treatment effect of **{metrics['avg_lift']:,.2f}** per period, compounding to a total cumulative impact of **{metrics['cum_lift']:,.2f}**. {sig_text}{conclusion}")
+                
+                    with st.expander("Show Raw Model Output"):
+                        st.markdown(results['result']['summary'])
                 
                 if 'plot_path' in results['result'] or 'att_plot_path' in results['result']:
                     col_plot1, col_plot2 = st.columns(2)

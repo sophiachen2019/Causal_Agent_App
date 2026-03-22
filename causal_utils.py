@@ -1080,7 +1080,9 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             
             # 4. Extract metrics from summary
             sum_data <- impact$summary
-            rel_effect <- sum_data$RelEffect[1] # Average Relative Effect
+            rel_effect <- sum_data$RelEffect[1] * 100 # Average Relative Effect %
+            rel_lower <- sum_data$RelEffect.lower[1] * 100
+            rel_upper <- sum_data$RelEffect.upper[1] * 100
             
             p_val <- impact$summary$p[1]
             
@@ -1111,6 +1113,8 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             cum_lower = robjects.r('cum_lower')[0]
             cum_upper = robjects.r('cum_upper')[0]
             rel_effect = robjects.r('rel_effect')[0]
+            rel_lower = robjects.r('rel_lower')[0]
+            rel_upper = robjects.r('rel_upper')[0]
             
             # report_text in R might be a vector of strings depending on print method, we'll try to join it
             report_r = robjects.r('report_text')
@@ -1121,14 +1125,20 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             'plot_path': plot_file,
             'summary': "R CausalImpact model summarized below.",
             'report': report_str,
-            'p_value': p_val,
-            'ate': ate,
-            'ate_lower': ate_lower,
-            'ate_upper': ate_upper,
-            'cumulative_abs': cum,
-            'cumulative_lower': cum_lower,
-            'cumulative_upper': cum_upper,
-            'relative_effect': rel_effect
+            'metrics': {
+                'p_value': p_val,
+                'ate': ate,
+                'ate_lower': ate_lower,
+                'ate_upper': ate_upper,
+                'cum_abs': cum,
+                'cum_lower': cum_lower,
+                'cum_upper': cum_upper,
+                'rel_effect': rel_effect,
+                'rel_lower': rel_lower,
+                'rel_upper': rel_upper,
+                'alpha': 0.05,
+                'significant': p_val < 0.05
+            }
         }
 
     except Exception as e:
@@ -1273,11 +1283,33 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             avg_lift <- summary_res$ATT_est
             cumulative_lift <- summary_res$incremental
             p_val <- summary_res$pvalue
+            perc_lift <- summary_res$PercLift
+            
+            # Retrieve CIs if available
+            has_ci <- !is.null(summary_res$CI)
+            if (has_ci) {
+                ate_lower <- summary_res$LowerCI[1]
+                ate_upper <- summary_res$UpperCI[1]
+                cum_lower <- summary_res$lower[1]
+                cum_upper <- summary_res$upper[1]
+            } else {
+                ate_lower <- NA
+                ate_upper <- NA
+                cum_lower <- NA
+                cum_upper <- NA
+            }
             """)
             
             r_avg = robjects.globalenv['avg_lift']
             r_cum = robjects.globalenv['cumulative_lift']
             r_p = robjects.globalenv['p_val']
+            perc_lift = robjects.globalenv['perc_lift'][0]
+            
+            has_ci = robjects.globalenv['has_ci'][0]
+            ate_lower = robjects.globalenv['ate_lower'][0] if has_ci else None
+            ate_upper = robjects.globalenv['ate_upper'][0] if has_ci else None
+            cum_lower = robjects.globalenv['cum_lower'][0] if has_ci else None
+            cum_upper = robjects.globalenv['cum_upper'][0] if has_ci else None
             
             if r_avg is robjects.NULL or r_cum is robjects.NULL or r_p is robjects.NULL:
                 return {"error": "GeoLift estimation produced NULL metrics. Check if control group has enough variance."}
@@ -1323,6 +1355,10 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             # Cleanup
             robjects.r("rm(gl_res, summary_res, avg_lift, cumulative_lift, p_val, full_summary_text)")
             
+            # Calculate bounds for relative lift (%) if CI exists
+            rel_lower = (cum_lower / (cum_lift / (perc_lift / 100))) * 100 if has_ci and perc_lift != 0 else None
+            rel_upper = (cum_upper / (cum_lift / (perc_lift / 100))) * 100 if has_ci and perc_lift != 0 else None
+                
             return {
                 "summary": report,
                 "metrics": {
@@ -1332,7 +1368,15 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
                     "alpha": float(alpha),
                     "treated_geo": treated_geo,
                     "model": model,
-                    "significant": p_val < alpha
+                    "significant": p_val < alpha,
+                    "perc_lift": float(perc_lift),
+                    "ate_lower": float(ate_lower) if ate_lower else None,
+                    "ate_upper": float(ate_upper) if ate_upper else None,
+                    "cum_lower": float(cum_lower) if cum_lower else None,
+                    "cum_upper": float(cum_upper) if cum_upper else None,
+                    "rel_lower": float(rel_lower) if rel_lower else None,
+                    "rel_upper": float(rel_upper) if rel_upper else None,
+                    "has_ci": bool(has_ci)
                 },
                 "plot_path": impact_plot_file,
                 "att_plot_path": att_plot_file
