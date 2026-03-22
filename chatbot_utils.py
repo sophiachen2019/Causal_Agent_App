@@ -60,9 +60,9 @@ def get_app_context():
        - Validations: Refutation tests (Random Common Cause, Placebo Treatment).
        - Features: ATE estimation, HTE (Heterogeneity) analysis.
     2. Quasi-Experimental Analysis (Tab 4):
-       - Methods: Difference-in-Differences (DiD), CausalImpact (Bayesian Structural Time Series), and GeoLift (Synthetic Control via R).
-       - When to use: When the intervention is not randomly assigned at the user level, but rather implemented over time or across specific geographic regions or units.
-       - Use GeoLift specifically when comparing a treated geography vs several untreated control geographies over time. It relies on the Augmented Synthetic Control Method (Ben-Michael, Feller, and Roth, 2021) and the Meta Open Source GeoLift package (Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023).
+       - Methods: Difference-in-Differences (DiD), Switchback Analysis, Interrupted/Bayesian Time Series (ITS/BSTS), and GeoLift (Synthetic Control via R).
+       - When to use: When the intervention is not randomly assigned at the user level, but rather implemented over time, mapped conditionally via randomized time blocks (Switchback), or separated across specific geographic regions (GeoLift).
+       - Impact Estimation: ITS/BSTS and GeoLift return 4-column metric scorecards including ATE, Cumulative Lift, and Relative Lift. They prominently display 95% Confidence Intervals mapped conditionally off `metrics['has_ci']`. All simulation models default to 60-day prediction windows beginning Nov 1st.
        - Support: Panel Data (Synthetic Control style) or Aggregate Time Series.
     3. Reproducibility:
        - Every analysis in Tab 3 and Tab 4 has a "Data & Script Export" section to download CSV results and a Python reproduction script.

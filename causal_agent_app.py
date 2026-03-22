@@ -1020,7 +1020,8 @@ with tab_guide:
 
     **Quasi-Experimental Analysis**:
     - **Difference-in-Differences (DiD)**: Compare the change in outcome for a treatment group vs a control group in pre/post periods.
-    - **CausalImpact (BSTS)**: specific for Time Series. 
+    - **Switchback Analysis**: Analyze randomized time-block experiments (like dispatch algorithms or delivery routing) with robust cluster standard errors.
+    - **Interrupted/Bayesian Time Series (ITS/BSTS)**: specific for Time Series. 
         - Predicts the counterfactual using a Bayesian Structural Time Series model.
         - **Control Variables**: Select external predictors (Covariates) like "Marketing Spend" to improve model accuracy.
         - **Synthetic Control**: Run as "Panel Data" to use other units as controls.
@@ -1043,8 +1044,9 @@ with tab_guide:
     | Method | Use Case | Input Data Structure & Instruction | Output & Results Interpretation |
     | :--- | :--- | :--- | :--- |
     | **Difference-in-Differences (DiD)** | Measuring impact when you have a **Control Group** and **Pre/Post Periods**. Assumes parallel trends. | **Structure**: Long format (one row per unit per time).<br>**Input**: Select `Treatment Col` (Group), `Outcome`, and `Time Period` (Pre/Post). | **Table**: View Interaction Coefficient.<br>**Interpretation**: A significant p-value (< 0.05) on the **Interaction Term** indicates a causal effect. The coefficient shows the absolute change in the outcome. |
-    | **CausalImpact (Bayesian STS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. Check "Run as Panel Data" to use other units as controls. | **Metrics & Plots**: View Average/Cumulative effect.<br>**Interpretation**: Focus on **Relative Lift** (%) and the **95% Confidence Interval**. If the CI does not cross zero, the effect is statistically significant. |
-    | **GeoLift (Synthetic Control via R)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data, outputting MDE and Power.<br>2. **Impact Estimation**: Estimates true causal effect post-campaign. | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, focus on the **p-value** and **Average Estimated Treatment Effect**. A p-value < alpha (e.g., 0.10) indicates a significant campaign impact. |
+    | **Switchback Analysis** | Randomized alternating time-block experiments (e.g. food delivery varying pricing hour-by-hour in the same city). | **Structure**: Panel Data.<br>**Input**: Select `Date/Time Col`, `Geographic Col`, and `Outcome`. The algorithm clusters standard errors natively. | **Robust Coefficient & P-Value**: Calculates reliable intervals protecting against intra-region serial correlation.<br>**Interpretation**: A p-value < 0.05 on the treatment row shows a significant localized effect. |
+    | **Interrupted/Bayesian Time Series (ITS/BSTS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. Defaults to a 60-day prediction window. | **Scorecard & Plots**: ATE, Cumulative Effect, and Relative Lift (%).<br>**Interpretation**: Focus on the **95% Confidence Intervals** beneath the 3 headline metrics. If the CI does not cross zero, the effect is statistically significant. |
+    | **GeoLift (Synthetic Control via R)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data outputting MDE and Power (Defaults to 60-day testing).<br>2. **Impact Estimation**: Estimates true causal effect post-campaign (Defaults to Nov 1st dates). | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, review the unified **Statistical Summary Scorecard**. Focus on the overall test **P-value**. P < alpha indicates a significant campaign impact. |
     
 
     ### 3. Export Data and Script
@@ -2611,7 +2613,7 @@ with tab_quasi:
                     
                     st.subheader("Statistical Summary")
                     c1, c2, c3 = st.columns(3)
-                    p = metrics['p_value']
+                    p = metrics['p_val']
                     with c1:
                         ci_str = f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}] | p={p:.3f}" if metrics.get('has_ci') else f"p={p:.3f}"
                         st.metric("Average Effect (ATT)", f"{metrics['avg_lift']:,.2f}", ci_str, delta_color="off")
