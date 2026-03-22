@@ -2297,9 +2297,9 @@ with tab_quasi:
             with st.expander("Advanced Configuration"):
                 st.markdown("""
                 **⚡ Performance Tips**:
-                - **Model**: 'none' is the fastest. 'Ridge' adds precision but can be 3-5x slower.
-                - **Lookback**: Increasing this creates a linear multiplier on runtime (e.g. 5x for window of 5).
-                - **N**: Entering multiple values (e.g. '1, 2') doubles the simulation work.
+                - **Number of Test Markets (N)**: Testing combinations (e.g. '1, 2') massively increases computation time compared to just '1' because it builds synthetic controls for every possible pair.
+                - **Lookback Window**: Increasing this acts as a direct multiplier on runtime. A lookback of 5 takes 5x longer than a lookback of 1, because it simulates the test backwards 5 independent times.
+                - **Model**: 'none' (standard Synthetic Control) is the fastest. Adding 'Ridge' or 'GSYN' augmentation significantly improves precision on noisy data but can be 3-5x slower to optimize.
                 """)
                 
                 pow_n_markets = st.text_input("Number of Test Markets (comma-separated)", value="1", help="e.g. '1' to test single regions, or '1, 2' to test groups of 1 and 2.")
