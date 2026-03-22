@@ -7,7 +7,7 @@ Try it out here: https://causalinferenceagent.streamlit.app/
 ## 🚀 Key Features
 
 - **Observational Analysis**: Implements robust causal estimation methods including OLS/Logit, Propensity Score Matching (PSM), Inverse Propensity Weighting (IPTW), Double Machine Learning (DML), and Meta-Learners (S/T-Learner).
-- **Quasi-Experimental Analysis**: Dedicated modules for **Difference-in-Differences (DiD)**, **Interrupted/Bayesian Time Series (ITS/BSTS)**, and **GeoLift (Synthetic Control via R)** for panel and geographic split-testing data.
+- **Quasi-Experimental Analysis**: Dedicated modules for **Difference-in-Differences (DiD)**, **Interrupted/Bayesian Time Series (ITS/BSTS)**, and **GeoLift (Synthetic Control)** for panel and geographic split-testing data.
 - **Unified Impact Estimation**: GeoLift and ITS/BSTS share a fully standardized metric scorecard UI natively compiling robust 95% Confidence Intervals for Absolute, Cumulative, and Relative Lifts. 
 - **AI Assistant**: An integrated chatbot powered by Gemini (Google GenAI) to provide guidance on methodology, interpret results, and suggest best practices.
 - **Reproducible Research**: One-click generation of Python scripts to reproduce any analysis performed in the UI.

@@ -379,7 +379,7 @@ with localconverter(cv):
 """
         return script
     
-    elif estimation_method == "GeoLift (Synthetic Control via R)":
+    elif estimation_method == "GeoLift (Synthetic Control)":
         date_col = ts_params['date_col'] if ts_params and 'date_col' in ts_params else time_period
         geo_col = unit_col
         treated_geo = treated_unit

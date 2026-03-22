@@ -60,7 +60,7 @@ def get_app_context():
        - Validations: Refutation tests (Random Common Cause, Placebo Treatment).
        - Features: ATE estimation, HTE (Heterogeneity) analysis.
     2. Quasi-Experimental Analysis (Tab 4):
-       - Methods: Difference-in-Differences (DiD), Interrupted/Bayesian Time Series (ITS/BSTS), and GeoLift (Synthetic Control via R).
+       - Methods: Difference-in-Differences (DiD), Interrupted/Bayesian Time Series (ITS/BSTS), and GeoLift (Synthetic Control).
        - When to use: When the intervention is not randomly assigned at the user level, but rather implemented over time or separated across specific geographic regions (GeoLift).
        - Impact Estimation: ITS/BSTS and GeoLift return 4-column metric scorecards including ATE, Cumulative Lift, and Relative Lift. They prominently display 95% Confidence Intervals mapped conditionally off `metrics['has_ci']`. All simulation models default to 60-day prediction windows beginning Nov 1st.
        - Support: Panel Data (Synthetic Control style) or Aggregate Time Series.
@@ -157,7 +157,7 @@ def run_time_series_bsts(date_col: str, outcome_col: str, intervention_date: str
 
 def run_synthetic_control_geolift(date_col: str, geo_col: str, treated_geo: str, kpi_col: str, intervention_date: str, treatment_duration: int, covariates: list[str] = None) -> str:
     """
-    Runs GeoLift (Synthetic Control via R) on Panel Data. Best for geographic A/B testing where a market is treated.
+    Runs GeoLift (Synthetic Control) on Panel Data. Best for geographic A/B testing where a market is treated.
     intervention_date must be YYYY-MM-DD.
     """
     if 'df' not in st.session_state or st.session_state.df is None:

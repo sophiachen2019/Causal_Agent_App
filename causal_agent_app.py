@@ -1024,7 +1024,7 @@ with tab_guide:
         - Predicts the counterfactual using a Bayesian Structural Time Series model.
         - **Control Variables**: Select external predictors (Covariates) like "Marketing Spend" to improve model accuracy.
         - **Synthetic Control**: Run as "Panel Data" to use other units as controls.
-    - **GeoLift**: Geographic split-testing (Synthetic Control via R) optimized for market-level A/B testing.
+    - **GeoLift**: Geographic split-testing (Synthetic Control) optimized for market-level A/B testing.
 
     #### A. Observational Analysis
     Use this for standard cross-sectional analysis or when you have user-level data without a time-series dimension.
@@ -1045,7 +1045,7 @@ with tab_guide:
     | :--- | :--- | :--- | :--- |
     | **Difference-in-Differences (DiD)** | Measuring impact when you have a **Control Group** and **Pre/Post Periods**. Assumes parallel trends. | **Structure**: Long format (one row per unit per time).<br>**Input**: Select `Treatment Col` (Group), `Outcome`, and `Time Period` (Pre/Post). | **Table**: View Interaction Coefficient.<br>**Interpretation**: A significant p-value (< 0.05) on the **Interaction Term** indicates a causal effect. The coefficient shows the absolute change in the outcome. |
     | **Interrupted/Bayesian Time Series (ITS/BSTS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. | **Scorecard & Plots**: ATE, Cumulative Effect, and Relative Lift (%).<br>**Interpretation**: Focus on the **95% Confidence Intervals** beneath the 3 headline metrics. If the CI does not cross zero, the effect is statistically significant. |
-    | **GeoLift (Synthetic Control via R)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data outputting MDE and Power.<br>2. **Impact Estimation**: Estimates true causal effect post-campaign. | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, review the unified **Statistical Summary Scorecard**. Focus on the overall test **P-value**. P < alpha indicates a significant campaign impact. |
+    | **GeoLift (Synthetic Control)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data outputting MDE and Power.<br>2. **Impact Estimation**: Estimates true causal effect post-campaign. | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, review the unified **Statistical Summary Scorecard**. Focus on the overall test **P-value**. P < alpha indicates a significant campaign impact. |
     
 
     ### 3. Export Data and Script
@@ -2099,7 +2099,7 @@ with tab_quasi:
     
     quasi_method = st.selectbox(
         "Analysis Method",
-        ["Difference-in-Differences (DiD)", "CausalImpact (Bayesian Time Series)", "GeoLift (Synthetic Control via R)"],
+        ["Difference-in-Differences (DiD)", "CausalImpact (Bayesian Time Series)", "GeoLift (Synthetic Control)"],
         help="DiD requires Control Group + Pre/Post. CausalImpact requires Pre-Period time series to predict Post-Period."
     )
     
@@ -2243,7 +2243,7 @@ with tab_quasi:
 
 
     # --- GeoLift Analysis ---
-    elif quasi_method == "GeoLift (Synthetic Control via R)":
+    elif quasi_method == "GeoLift (Synthetic Control)":
         st.subheader("Configuration: GeoLift Analysis")
         
         # Power Analysis vs Estimation Toggle
@@ -2408,7 +2408,7 @@ with tab_quasi:
                             covariates=est_covariates
                         )
                         st.session_state.quasi_results = {
-                            'method': 'GeoLift (Synthetic Control via R)',
+                            'method': 'GeoLift (Synthetic Control)',
                             'result': results,
                             'date_col': geo_lift_date,
                             'geo_col': geo_lift_geo,
@@ -2418,7 +2418,7 @@ with tab_quasi:
                             'treatment_duration': geo_lift_duration
                         }
                         st.session_state.quasi_analysis_run = True
-                        st.session_state.quasi_method_run = "GeoLift (Synthetic Control via R)"
+                        st.session_state.quasi_method_run = "GeoLift (Synthetic Control)"
                         st.success("GeoLift Analysis Complete! Scroll down to see results.")
                     except Exception as e:
                         st.error(f"GeoLift Analysis failed: {e}")
@@ -2586,13 +2586,13 @@ with tab_quasi:
                     **Note on Locations**: If you see multiple regions listed for a single location (e.g., "Region_1, Region_2"), it means GeoLift recommends testing these regions **together as a cluster** to achieve the required statistical power.
                     """)
 
-        elif quasi_method_run == "GeoLift (Synthetic Control via R)":
+        elif quasi_method_run == "GeoLift (Synthetic Control)":
             st.divider()
             
             if "error" in results['result']:
                 st.error(results['result']['error'])
             else:
-                st.subheader("Results: GeoLift (Synthetic Control via R)")
+                st.subheader("Results: GeoLift (Synthetic Control)")
                 
                 st.markdown(r"""
                 **Methodology (Augmented Synthetic Control):**

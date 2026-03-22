@@ -12,7 +12,7 @@ rpy2
 # --- Metadata ---
 # Release: 4.2.0 | 2026-03-22 | Standardized inference scorecards for GeoLift and CausalImpact, added underlying time series UI data tables, and enhanced Python script exporter template parameters.
 # Release: 4.1.0 | 2026-03-15 | Added covariate support for GeoLift models and migrated CausalImpact to the official R implementation for greater accuracy.
-# Release: 4.0.0 | 2026-03-14 | Added GeoLift (Synthetic Control via R) for Market Selection and Impact Estimation.
+# Release: 4.0.0 | 2026-03-14 | Added GeoLift (Synthetic Control) for Market Selection and Impact Estimation.
 # Release: 3.2.0 | 2026-02-11 | Refined data summary and chart builder features; Enabled covariates for BSTS.
 # Release: 3.1.0 | 2026-02-06 | Added methodology references and simulated data for BSTS.
 # Release: 3.0.0 | 2026-02-04 | Added Bayesian Structural Time Series(BSTS), restructured UI tabs, and created README.
