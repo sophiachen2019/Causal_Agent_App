@@ -1375,7 +1375,7 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
             
             # Application of historical cutoff if provided
             if cutoff_date:
-                df_clean = df_clean[pd.to_datetime(df_clean[date_col]) <= pd.to_datetime(cutoff_date)]
+                df_clean = df_clean[pd.to_datetime(df_clean[date_col]) < pd.to_datetime(cutoff_date)]
                 
             df_clean = df_clean.dropna()
             df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.strftime('%Y-%m-%d')

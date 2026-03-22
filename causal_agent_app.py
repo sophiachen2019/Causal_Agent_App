@@ -2281,7 +2281,7 @@ with tab_quasi:
             
             # For the demo, default to Nov 1st 2023 if available
             if 'Region' in df.columns and 'Date' in df.columns:
-                demo_cutoff = pd.to_datetime('2023-11-01')
+                demo_cutoff = pd.to_datetime('2023-10-28')
                 if demo_cutoff >= pow_min_date and demo_cutoff <= pow_max_date:
                     pow_default_cutoff = demo_cutoff
             
