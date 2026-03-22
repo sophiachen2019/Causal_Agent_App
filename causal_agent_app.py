@@ -130,7 +130,7 @@ def simulate_bsts_demo_data():
     """Generates multi-region time series data with a clear intervention for BSTS/Synthetic Control demo."""
     np.random.seed(42)
     regions = [f'Region_{i}' for i in range(1, 41)]
-    total_days = 400
+    total_days = 364
     start_date = pd.to_datetime('2023-01-01')
     date_range = pd.date_range(start=start_date, periods=total_days)
     
@@ -2376,7 +2376,7 @@ with tab_quasi:
             
             try:
                 # Let's try to infer if they are using the demo dataset
-                if 'Region' in df.columns and 'Date' in df.columns and 'Chicago' in treated_geo_options:
+                if 'Region' in df.columns and 'Date' in df.columns:
                      default_int_val = pd.to_datetime('2023-11-01')
                      if default_int_val >= min_date and default_int_val <= max_date:
                          default_int = default_int_val

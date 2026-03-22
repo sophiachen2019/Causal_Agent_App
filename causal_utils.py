@@ -43,7 +43,7 @@ def simulate_bsts_demo_data():
     \"\"\"Generates multi-region time series data for BSTS demo.\"\"\"
     np.random.seed(42)
     regions = [f'Region_{i}' for i in range(1, 41)]
-    total_days = 400
+    total_days = 364
     start_date = pd.to_datetime('2023-01-01')
     date_range = pd.date_range(start=start_date, periods=total_days)
     data_list = []
