@@ -379,6 +379,81 @@ with localconverter(cv):
 """
         return script
     
+    elif estimation_method == "GeoLift (Synthetic Control via R)":
+        date_col = ts_params['date_col'] if ts_params and 'date_col' in ts_params else time_period
+        geo_col = unit_col
+        treated_geo = treated_unit
+        outcome_col = outcome
+        intervention_date = ts_params.get('intervention_date', '') if ts_params else ''
+        duration = ts_params.get('n_periods', 14) if ts_params else 14
+        
+        script += f"""
+# --- 3. Quasi-Experimental Analysis: GeoLift (via Meta R package) ---
+print("\\nRunning GeoLift Analysis using R...")
+import rpy2.robjects as robjects
+from rpy2.robjects.packages import importr
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
+
+date_col = '{date_col}'
+geo_col = '{geo_col}'
+outcome_col = '{outcome_col}'
+treated_geo = '{treated_geo}'
+intervention_date = '{intervention_date}'
+duration = {duration}
+covariates = {confounders}
+
+cols_to_keep = [date_col, geo_col, outcome_col] + covariates
+df_clean = df[cols_to_keep].dropna().copy()
+df_clean[date_col] = pd.to_datetime(df_clean[date_col]).dt.strftime('%Y-%m-%d')
+for c in [outcome_col] + covariates:
+    df_clean[c] = pd.to_numeric(df_clean[c])
+
+cv = robjects.default_converter + pandas2ri.converter
+with localconverter(cv):
+    r_df = pandas2ri.py2rpy(df_clean)
+    robjects.globalenv['py_data'] = r_df
+    robjects.globalenv['time_id'] = date_col
+    robjects.globalenv['geo_id'] = geo_col
+    robjects.globalenv['Y_id'] = outcome_col
+    robjects.globalenv['treated_locs'] = robjects.StrVector([treated_geo])
+    robjects.globalenv['treatment_start'] = intervention_date
+    robjects.globalenv['duration'] = duration
+    robjects.globalenv['cov_names'] = robjects.StrVector(covariates) if covariates else robjects.NULL
+
+    robjects.r(\"\"\"
+    suppressMessages(library(GeoLift))
+    
+    unique_dates <- sort(unique(as.Date(py_data[[time_id]])))
+    treatment_start_date <- as.Date(treatment_start)
+    match_idx <- which(unique_dates >= treatment_start_date)
+    
+    if (length(match_idx) == 0) {{
+        stop("Treatment start date is after all available data.")
+    }}
+    treatment_start_idx <- match_idx[1]
+    
+    if (is.null(cov_names)) {{
+        geo_data <- GeoDataRead(data = py_data, date_id = time_id, location_id = geo_id, Y_id = Y_id, format = "yyyy-mm-dd")
+    }} else {{
+        geo_data <- GeoDataRead(data = py_data, date_id = time_id, location_id = geo_id, Y_id = Y_id, X = cov_names, format = "yyyy-mm-dd")
+    }}
+    
+    max_time <- max(geo_data$time)
+    treatment_end_idx <- min(treatment_start_idx + duration - 1, max_time)
+    
+    if (is.null(cov_names)) {{
+        gl_res <- GeoLift(Y_id = "Y", time_id = "time", location_id = "location", data = geo_data, locations = treated_locs, treatment_start_time = treatment_start_idx, treatment_end_time = treatment_end_idx, model = "none")
+    }} else {{
+        gl_res <- GeoLift(Y_id = "Y", time_id = "time", location_id = "location", X = cov_names, data = geo_data, locations = treated_locs, treatment_start_time = treatment_start_idx, treatment_end_time = treatment_end_idx, model = "none")
+    }}
+    
+    print(summary(gl_res))
+    # plot(gl_res)
+    \"\"\")
+"""
+        return script
+
     # --- Time Series Logic Injection in Script ---
     if ts_params and ts_params.get('enabled'):
         date_col = ts_params['date_col']
