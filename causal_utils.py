@@ -58,7 +58,7 @@ def simulate_bsts_demo_data():
         noise = np.random.normal(0, 2, total_days)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
         
-        intervention_day = 300
+        intervention_day = 304
         if region == 'Region_1':
             lift = np.zeros(total_days)
             lift[intervention_day:] = 30 + np.cumsum(np.random.normal(0.5, 0.1, total_days - intervention_day))

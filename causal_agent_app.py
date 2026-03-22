@@ -152,8 +152,8 @@ def simulate_bsts_demo_data():
         # Base Metric (e.g. Daily Revenue)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
         
-        # Intervention Effect (Only for Region_1, starting at day 300)
-        intervention_day = 300
+        # Intervention Effect (Only for Region_1, starting at day 304, which is 2023-11-01)
+        intervention_day = 304
         
         if region == 'Region_1':
             # Add a cumulative lift starting from intervention_day
@@ -2165,7 +2165,7 @@ with tab_quasi:
                 
                 # Default intervention date
                 if 'Is_Treated_Region' in df.columns:
-                    default_int = pd.to_datetime('2023-10-28')
+                    default_int = pd.to_datetime('2023-11-01')
                 else:
                     default_int = min_date + (max_date - min_date) / 2
                 
@@ -2272,7 +2272,7 @@ with tab_quasi:
                 kpi_options = [c for c in num_cols if c not in pow_covariates]
                 power_kpi = st.selectbox("Outcome Column", kpi_options, index=get_index(kpi_options, 'KPI', 0) if len(kpi_options) > 0 else 0, key="pow_kpi")
             
-            power_duration = st.number_input("Expected Treatment Duration (Days)", min_value=1, value=14, key="pow_dur", help="How long do you expect the marketing test to run?")
+            power_duration = st.number_input("Expected Treatment Duration (Days)", min_value=1, value=60, key="pow_dur", help="How long do you expect the marketing test to run?")
             
             # Cutoff date logic for testing on datasets with existing treatment
             pow_min_date = df[power_date].min()
@@ -2281,7 +2281,7 @@ with tab_quasi:
             
             # For the demo, default to Nov 1st 2023 if available
             if 'Region' in df.columns and 'Date' in df.columns:
-                demo_cutoff = pd.to_datetime('2023-10-28')
+                demo_cutoff = pd.to_datetime('2023-11-01')
                 if demo_cutoff >= pow_min_date and demo_cutoff <= pow_max_date:
                     pow_default_cutoff = demo_cutoff
             
@@ -2377,14 +2377,14 @@ with tab_quasi:
             try:
                 # Let's try to infer if they are using the demo dataset
                 if 'Region' in df.columns and 'Date' in df.columns and 'Chicago' in treated_geo_options:
-                     default_int_val = pd.to_datetime('2023-03-02')
+                     default_int_val = pd.to_datetime('2023-11-01')
                      if default_int_val >= min_date and default_int_val <= max_date:
                          default_int = default_int_val
             except:
                  pass
                  
             geo_lift_intervention_date = st.date_input("Intervention Start Date", value=default_int, min_value=min_date.date() if hasattr(min_date, 'date') else None, max_value=max_date.date() if hasattr(max_date, 'date') else None, key="gl_int")
-            geo_lift_duration = st.number_input("Treatment Duration (Days)", min_value=1, value=14, key="gl_dur2")
+            geo_lift_duration = st.number_input("Treatment Duration (Days)", min_value=1, value=60, key="gl_dur2")
 
             with st.expander("Estimation Configuration"):
                 est_model = st.selectbox("Augmentation Model", ["none", "Ridge", "GSYN", "best"], index=0, key="gl_model_est")
