@@ -2510,6 +2510,9 @@ with tab_quasi:
             st.subheader("Visualization")
             try:
                 st.image(results['plot_path'], caption="CausalImpact Results: Original, Pointwise, and Cumulative", use_container_width=True)
+                if 'plot_df' in results and results['plot_df'] is not None:
+                    with st.expander("View Underlying Plot Data", expanded=False):
+                        st.dataframe(results['plot_df'], use_container_width=True)
             except Exception as e:
                 st.warning(f"Could not render plot from R: {e}")
 
@@ -2646,6 +2649,10 @@ with tab_quasi:
                             st.image(results['result']['att_plot_path'], caption="Average Treatment Effect on the Treated (ATT)", use_container_width=True)
                         except Exception as e:
                             st.warning(f"Could not load ATT plot: {e}")
+                    
+                    if 'plot_df' in results and results['plot_df'] is not None:
+                        with st.expander("View Underlying Plot Data", expanded=False):
+                            st.dataframe(results['plot_df'], use_container_width=True)
 
         # --- EXPORT SECTION ---
         st.divider()

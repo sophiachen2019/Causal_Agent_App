@@ -1055,7 +1055,9 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             
             timestamp = int(time.time())
             plot_file = f"causalimpact_plot_{timestamp}.png"
+            csv_file = f"causalimpact_plot_{timestamp}.csv"
             robjects.globalenv['plot_path'] = plot_file
+            robjects.globalenv['csv_path'] = csv_file
 
             robjects.r("""
             # 1. Create zoo object
@@ -1102,6 +1104,9 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             png(plot_path, width=800, height=600, res=100)
             print(plot(impact))
             dev.off()
+            
+            # Export plot data
+            write.csv(as.data.frame(impact$series), file=csv_path, row.names=TRUE)
             """)
             
             # Retrieve values from R ecosystem
@@ -1120,11 +1125,17 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             report_r = robjects.r('report_text')
             report_str = "\n".join(report_r) if hasattr(report_r, '__iter__') and not isinstance(report_r, str) else str(report_r)
 
+            # Read plot data
+            plot_df = None
+            if os.path.exists(csv_file):
+                plot_df = pd.read_csv(csv_file).rename(columns={'Unnamed: 0': 'Time'})
+
         return {
             'object': None, # No python object anymore
             'plot_path': plot_file,
             'summary': "R CausalImpact model summarized below.",
             'report': report_str,
+            'plot_df': plot_df,
             'metrics': {
                 'p_value': p_val,
                 'ate': ate,
@@ -1324,8 +1335,10 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             timestamp = int(time.time())
             impact_plot_file = f"geolift_impact_plot_{timestamp}.png"
             att_plot_file = f"geolift_att_plot_{timestamp}.png"
+            csv_file = f"geolift_plot_data_{timestamp}.csv"
             robjects.globalenv['impact_plot_path'] = impact_plot_file
             robjects.globalenv['att_plot_path'] = att_plot_file
+            robjects.globalenv['csv_path'] = csv_file
             
             # Generate the plots and capture the full inference summary
             robjects.r("""
@@ -1341,6 +1354,27 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             png(att_plot_path, width=800, height=600)
             print(plot(gl_res, type="ATT"))
             dev.off()
+            
+            # Export plot data
+            if ("y_obs" %in% names(gl_res) && "y_hat" %in% names(gl_res)) {
+                has_bounds <- "lower_bound" %in% names(gl_res)
+                if (has_bounds) {
+                    plot_data <- data.frame(
+                        Time = names(gl_res$y_obs),
+                        Observed = as.numeric(gl_res$y_obs),
+                        Synthetic = as.numeric(gl_res$y_hat),
+                        Lower_Bound = as.numeric(gl_res$lower_bound),
+                        Upper_Bound = as.numeric(gl_res$upper_bound)
+                    )
+                } else {
+                    plot_data <- data.frame(
+                        Time = names(gl_res$y_obs),
+                        Observed = as.numeric(gl_res$y_obs),
+                        Synthetic = as.numeric(gl_res$y_hat)
+                    )
+                }
+                write.csv(plot_data, file=csv_path, row.names=FALSE)
+            }
             """)
             
             full_summary = robjects.globalenv['full_summary_text'][0]
@@ -1358,9 +1392,14 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             perc_lift_decimal = perc_lift / 100
             rel_lower = (cum_lower / (cum_lift / perc_lift_decimal)) if has_ci and perc_lift != 0 else None
             rel_upper = (cum_upper / (cum_lift / perc_lift_decimal)) if has_ci and perc_lift != 0 else None
+            # Read plot data
+            plot_df = None
+            if os.path.exists(csv_file):
+                plot_df = pd.read_csv(csv_file)
                 
             return {
                 "summary": report,
+                "plot_df": plot_df,
                 "metrics": {
                     "avg_lift": float(avg_lift),
                     "cum_lift": float(cum_lift),
