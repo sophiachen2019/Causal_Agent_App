@@ -2753,7 +2753,7 @@ with tab_quasi:
             kpi_col = res_dict.get('kpi_col', 'Y')
             treated_geo = res_dict.get('treated_geo', 'Treated_Location')
             int_date = res_dict.get('intervention_date', '2023-01-01')
-            dur = res_dict.get('treatment_duration', 14)
+            dur = res_dict.get('treatment_duration', 60)
 
             script_quasi = f'''# Python Script for {quasi_method_run} using rpy2
 # Make sure to install: pip install rpy2 pandas
