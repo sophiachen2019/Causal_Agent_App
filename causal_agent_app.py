@@ -2564,19 +2564,16 @@ with tab_quasi:
                 st.markdown("Below are the ranked candidate markets based on pre-treatment fit and required MDE:")
                 
                 if 'df' in results['result']:
-                    st.dataframe(results['result']['df'], use_container_width=True)
-                    
-                    st.markdown(r"""
-                    #### 💡 How to Interpret & Select Markets
-                    To select the best candidate for your experiment, look for rows that balance these criteria:
-                    
-                    1.  **Lower RMSE (Pre-treatment Fit)**: Look at the **`AvgScaledL2Imbalance`** column. This measures how well the synthetic control matches your test market historically. 
-                        *   *Benchmark*: Values **below 0.2** indicate a strong fit. Avoid markets where this is very high.
-                    2.  **Lower MDE (Sensitivity)**: Look at the **`Average_MDE`** column. This is the smallest effect size the test can reliably detect. 
-                    3.  **Higher Power**: Look at the **`Power`** column. Standard practice is to aim for power $\ge$ 0.8 (80%).
-                    
-                    **Note on Locations**: If you see multiple regions listed for a single location (e.g., "Region_1, Region_2"), it means GeoLift recommends testing these regions **together as a cluster** to achieve the required statistical power.
-                    """)
+                    st.dataframe(
+                        results['result']['df'], 
+                        use_container_width=True,
+                        column_config={
+                            "AvgScaledL2Imbalance": st.column_config.NumberColumn(
+                                "AvgScaledL2Imbalance",
+                                help="A high Scaled Imbalance (near 1.0) often means your control markets are already so similar to your test market that the synthetic weighting adds little extra precision. If your visual fit is tight, the test is likely still valid."
+                            )
+                        }
+                    )
                     
                     st.subheader("Diagnostic Plots (#1 Ranked Market)")
                     col_plot1, col_plot2 = st.columns(2)
@@ -2586,6 +2583,24 @@ with tab_quasi:
                     with col_plot2:
                         if 'series_plot' in results['result']:
                             st.image(results['result']['series_plot'], caption="Historical Fit: Treated vs Synthetic", use_container_width=True)
+                            
+                    st.markdown(r"""
+                    #### 💡 How to Interpret & Select Markets
+                    To select the best candidate for your experiment, look for rows that balance these criteria:
+                    
+                    1.  **Lower RMSE (Pre-treatment Fit)**: Look at the **`AvgScaledL2Imbalance`** column. This measures how well the synthetic control matches your test market historically. 
+                        *   *Benchmark*: Values **below 0.2** indicate a exceptionally strong, unique fit. 
+                        *   *The Scaling "Trap"*: Because this metric is scaled against a simple average of all your donor regions, highly correlated datasets will naturally produce scores near 1.0. If the plot above shows the lines nearly perfectly overlapping and the `abs_lift_in_zero` column (pre-test hallucination) is near 0, your test is highly reliable and you can safely disregard a high L2 score!
+                        *   *How to improve a bad visual fit*: Try adding `Ridge` integration or filter your donor pool to remove identical "carbon-copy" cities, giving the algorithm more mathematical room to optimize.
+                    2.  **Lower MDE (Sensitivity)**: Look at the **`Average_MDE`** column. This is the smallest effect size the test can reliably detect. 
+                    3.  **Higher Power**: Look at the **`Power`** column. Standard practice is to aim for power $\ge$ 0.8 (80%).
+                    
+                    **Understanding the Plots**:
+                    *   **Power Curve**: Shows how statistical power scales up with the size of your effect. You want the curve to sharply rise and securely cross the 0.8 (80%) horizontal line as far left (at a low minimum detectable effect) as possible.
+                    *   **Historical Fit**: Shows your actual target market's data (solid line) vs the algorithm's constructed Synthetic Control (dashed line) during the pre-period. These lines should consistently overlap without crossing or "fanning out" too wildly.
+                    
+                    **Note on Locations**: If you see multiple regions listed for a single location (e.g., "Region_1, Region_2"), it means GeoLift recommends testing these regions **together as a cluster** to achieve the required statistical power.
+                    """)
 
         elif quasi_method_run == "GeoLift (Synthetic Control via R)":
             st.divider()
