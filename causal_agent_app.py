@@ -142,12 +142,12 @@ def simulate_bsts_demo_data():
     monthly_seasonality = 20 * np.sin(2 * np.pi * np.arange(total_days) / 30)
     
     for region in regions:
-        # Regional variation in trend - Region_1 explicitly elevated out of the convex hull
-        regional_offset = 40 if region == 'Region_1' else np.random.normal(0, 10)
+        # Regional variation in trend - Widen the convex hull naturally so Region_1 sits comfortably inside
+        regional_offset = np.random.normal(0, 20)
         regional_trend = global_trend + regional_offset
         
-        # Noise
-        noise = np.random.normal(0, 5, total_days)
+        # Noise - Reduced to simulate highly correlated/reliable donor markets
+        noise = np.random.normal(0, 2, total_days)
         
         # Base Metric (e.g. Daily Revenue)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise

@@ -53,9 +53,9 @@ def simulate_bsts_demo_data():
     monthly_seasonality = 20 * np.sin(2 * np.pi * np.arange(total_days) / 30)
     
     for region in regions:
-        base_offset = 40 if region == 'Region_1' else np.random.normal(0, 10)
+        base_offset = np.random.normal(0, 20)
         regional_trend = global_trend + base_offset
-        noise = np.random.normal(0, 5, total_days)
+        noise = np.random.normal(0, 2, total_days)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
         
         intervention_day = 300
