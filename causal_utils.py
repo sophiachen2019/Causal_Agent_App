@@ -1080,9 +1080,9 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
             
             # 4. Extract metrics from summary
             sum_data <- impact$summary
-            rel_effect <- sum_data$RelEffect[1] * 100 # Average Relative Effect %
-            rel_lower <- sum_data$RelEffect.lower[1] * 100
-            rel_upper <- sum_data$RelEffect.upper[1] * 100
+            rel_effect <- sum_data$RelEffect[1] # Average Relative Effect %
+            rel_lower <- sum_data$RelEffect.lower[1]
+            rel_upper <- sum_data$RelEffect.upper[1]
             
             p_val <- impact$summary$p[1]
             
@@ -1346,7 +1346,6 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             full_summary = robjects.globalenv['full_summary_text'][0]
             
             report = f"""
-            #### Full Inference Summary
             ```text
             {full_summary}
             ```
@@ -1355,9 +1354,10 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             # Cleanup
             robjects.r("rm(gl_res, summary_res, avg_lift, cumulative_lift, p_val, full_summary_text)")
             
-            # Calculate bounds for relative lift (%) if CI exists
-            rel_lower = (cum_lower / (cum_lift / (perc_lift / 100))) * 100 if has_ci and perc_lift != 0 else None
-            rel_upper = (cum_upper / (cum_lift / (perc_lift / 100))) * 100 if has_ci and perc_lift != 0 else None
+            # Calculate bounds for relative lift (%) if CI exists, returning decimal for python .2% conversion
+            perc_lift_decimal = perc_lift / 100
+            rel_lower = (cum_lower / (cum_lift / perc_lift_decimal)) if has_ci and perc_lift != 0 else None
+            rel_upper = (cum_upper / (cum_lift / perc_lift_decimal)) if has_ci and perc_lift != 0 else None
                 
             return {
                 "summary": report,
@@ -1369,7 +1369,7 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
                     "treated_geo": treated_geo,
                     "model": model,
                     "significant": p_val < alpha,
-                    "perc_lift": float(perc_lift),
+                    "perc_lift": float(perc_lift_decimal),
                     "ate_lower": float(ate_lower) if ate_lower else None,
                     "ate_upper": float(ate_upper) if ate_upper else None,
                     "cum_lower": float(cum_lower) if cum_lower else None,

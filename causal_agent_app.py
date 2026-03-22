@@ -2493,16 +2493,14 @@ with tab_quasi:
             if not metrics:
                 st.error("Model did not return valid metrics.")
             else:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3 = st.columns(3)
+                p = metrics['p_value']
                 with c1:
-                    st.metric("Average Effect (ATE)", f"{metrics['ate']:,.2f}", f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}]", delta_color="off")
+                    st.metric("Average Effect (ATE)", f"{metrics['ate']:,.2f}", f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}] | p={p:.3f}", delta_color="off")
                 with c2:
-                    st.metric("Cumulative Effect", f"{metrics['cum_abs']:,.2f}", f"95% CI: [{metrics['cum_lower']:,.2f}, {metrics['cum_upper']:,.2f}]", delta_color="off")
+                    st.metric("Cumulative Effect", f"{metrics['cum_abs']:,.2f}", f"95% CI: [{metrics['cum_lower']:,.2f}, {metrics['cum_upper']:,.2f}] | p={p:.3f}", delta_color="off")
                 with c3:
-                    st.metric("Relative Lift", f"{metrics['rel_effect']:+.2%}", f"95% CI: [{metrics['rel_lower']:.2f}%, {metrics['rel_upper']:.2f}%]", delta_color="off")
-                with c4:
-                    sig = metrics['significant']
-                    st.metric("P-Value", f"{metrics['p_value']:.4f}", "Significant" if sig else "Not Significant", delta_color="normal" if sig else "off")
+                    st.metric("Relative Lift", f"{metrics['rel_effect']:+.2%}", f"95% CI: [{metrics['rel_lower']:+.2%}, {metrics['rel_upper']:+.2%}] | p={p:.3f}", delta_color="off")
             
                 st.subheader("Report")
                 with st.expander("Read Detailed Report", expanded=False):
@@ -2612,19 +2610,17 @@ with tab_quasi:
                     metrics = results['result']['metrics']
                     
                     st.subheader("Statistical Summary")
-                    c1, c2, c3, c4 = st.columns(4)
+                    c1, c2, c3 = st.columns(3)
+                    p = metrics['p_value']
                     with c1:
-                        ci_str = f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}]" if metrics.get('has_ci') else "No CI calculated"
+                        ci_str = f"95% CI: [{metrics['ate_lower']:,.2f}, {metrics['ate_upper']:,.2f}] | p={p:.3f}" if metrics.get('has_ci') else f"p={p:.3f}"
                         st.metric("Average Effect (ATT)", f"{metrics['avg_lift']:,.2f}", ci_str, delta_color="off")
                     with c2:
-                        ci_str_cum = f"95% CI: [{metrics['cum_lower']:,.2f}, {metrics['cum_upper']:,.2f}]" if metrics.get('has_ci') else "No CI calculated"
+                        ci_str_cum = f"95% CI: [{metrics['cum_lower']:,.2f}, {metrics['cum_upper']:,.2f}] | p={p:.3f}" if metrics.get('has_ci') else f"p={p:.3f}"
                         st.metric("Cumulative Impact", f"{metrics['cum_lift']:,.2f}", ci_str_cum, delta_color="off")
                     with c3:
-                        ci_str_rel = f"95% CI: [{metrics['rel_lower']:.2f}%, {metrics['rel_upper']:.2f}%]" if metrics.get('has_ci') and metrics.get('rel_lower') is not None else "No CI calculated"
-                        st.metric("Relative Lift", f"{metrics['perc_lift']:+.2f}%", ci_str_rel, delta_color="off")
-                    with c4:
-                        sig_color = "normal" if metrics['significant'] else "off"
-                        st.metric("P-Value", f"{metrics['p_val']:.4f}", "Significant" if metrics['significant'] else "Not Significant", delta_color=sig_color)
+                        ci_str_rel = f"95% CI: [{metrics['rel_lower']:+.2%}, {metrics['rel_upper']:+.2%}] | p={p:.3f}" if metrics.get('has_ci') and metrics.get('rel_lower') is not None else f"p={p:.3f}"
+                        st.metric("Relative Lift", f"{metrics['perc_lift']:+.2%}", ci_str_rel, delta_color="off")
                         
                     direction = "increase" if metrics['cum_lift'] > 0 else "decrease"
                     if metrics['significant']:
@@ -2640,21 +2636,16 @@ with tab_quasi:
                         st.markdown(results['result']['summary'])
                 
                 if 'plot_path' in results['result'] or 'att_plot_path' in results['result']:
-                    col_plot1, col_plot2 = st.columns(2)
-                    with col_plot1:
-                        if 'plot_path' in results['result']:
-                            try:
-                                st.image(results['result']['plot_path'], caption="GeoLift Results: Treated vs Synthetic Control", use_container_width=True)
-                            except Exception as e:
-                                st.warning(f"Could not load standard plot: {e}")
-                    with col_plot2:
-                        if 'att_plot_path' in results['result']:
-                            try:
-                                st.image(results['result']['att_plot_path'], caption="Average Treatment Effect on the Treated (ATT)", use_container_width=True)
-                            except Exception as e:
-                                st.warning(f"Could not load ATT plot: {e}")
-                                
-                st.markdown(results['result']['summary'])
+                    if 'plot_path' in results['result']:
+                        try:
+                            st.image(results['result']['plot_path'], caption="GeoLift Results: Treated vs Synthetic Control", use_container_width=True)
+                        except Exception as e:
+                            st.warning(f"Could not load standard plot: {e}")
+                    if 'att_plot_path' in results['result']:
+                        try:
+                            st.image(results['result']['att_plot_path'], caption="Average Treatment Effect on the Treated (ATT)", use_container_width=True)
+                        except Exception as e:
+                            st.warning(f"Could not load ATT plot: {e}")
 
         # --- EXPORT SECTION ---
         st.divider()
