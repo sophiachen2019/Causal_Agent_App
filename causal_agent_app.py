@@ -994,7 +994,7 @@ with tab_guide:
     This application is designed to help you estimate causal effects from observational and A/B testing data using advanced statistical methods. You may also receive help from our **AI Assistant** in the dashboard.
     
     ### 1. Data Preparation
-    **Simulated Data**: If you don't have a dataset, select "Simulated Data" to explore the app's features with a generated dataset.
+    **Simulated Data**: If you don't have a dataset, select "Simulated Data" to explore the app's features. We provide two distinct sets of simulated data: one for Observational Analysis and one for Quasi-Experimental Analysis.
     
     **Upload Data**: Upload your own CSV file. Ensure your data contains:
     - **Treatment Column**: The variable indicating the intervention (e.g., `Feature_Adoption`, `Marketing_Campaign`).
@@ -1024,6 +1024,7 @@ with tab_guide:
         - Predicts the counterfactual using a Bayesian Structural Time Series model.
         - **Control Variables**: Select external predictors (Covariates) like "Marketing Spend" to improve model accuracy.
         - **Synthetic Control**: Run as "Panel Data" to use other units as controls.
+    - **GeoLift**: Geographic split-testing (Synthetic Control via R) optimized for market-level A/B testing.
 
     #### A. Observational Analysis
     Use this for standard cross-sectional analysis or when you have user-level data without a time-series dimension.
@@ -1032,7 +1033,7 @@ with tab_guide:
     | :--- | :--- | :--- | :--- |
     | **Linear/Logistic Regression (OLS/Logit)** | Simple observational studies or standard A/B tests with few control variables. | **Structure**: Cross-sectional.<br>**Input**: Select `Treatment` and `Outcome`. Add `Confounders` to control for bias. | **ATE & P-value**: Overall impact.<br>**Interpretation**: A p-value < 0.05 means the effect is statistically significant. Logit models show **Odds Ratios**. |
     | **Matching & Weighting (PSM/IPTW)** | When treatment/control groups are "unbalanced" (e.g., test users are older/more active than control). | **Structure**: Requires **Binary Treatment**.<br>**Input**: Uses Confounders to match similar users or re-weight the population. | **ATE (Adjusted)**: Effect after balancing.<br>**Interpretation**: Focus on the **95% Confidence Interval**. If it does not include zero, the result is significant. |
-    | **Double Machine Learning (DML)** | For high-dimensional data (many controls) or finding "Who" the treatment works best for (HTE). | **Structure**: Handles non-linearities.<br>**Input**: Uses ML to remove confounding noise from both treatment and outcome. | **CATE & HTE Results**: Specific segment effects.<br>**Interpretation**: View the **Effect Modification** table to identify which user features (e.g., Region, Tenure) drive the highest lift. |
+    | **Double Machine Learning (Linear/CausalForest DML)** | For high-dimensional data (many controls) or finding "Who" the treatment works best for (HTE). | **Structure**: Handles non-linearities.<br>**Input**: Uses ML to remove confounding noise from both treatment and outcome. | **CATE & HTE Results**: Specific segment effects.<br>**Interpretation**: View the **Effect Modification** table to identify which user features (e.g., Region, Tenure) drive the highest lift. |
     | **Meta-Learners (S/T-Learner)** | Advanced ML approach to estimate Individual Treatment Effects (ITE) and segmentation. | **Structure**: Highly flexible.<br>**Input**: Compares estimated success with vs. without treatment for every single row. | **ITE & Segment Analysis**: Granular lift.<br>**Interpretation**: Useful for **Personalization** (targeting users with high individual predicted lift). |
 
 
@@ -1043,8 +1044,8 @@ with tab_guide:
     | Method | Use Case | Input Data Structure & Instruction | Output & Results Interpretation |
     | :--- | :--- | :--- | :--- |
     | **Difference-in-Differences (DiD)** | Measuring impact when you have a **Control Group** and **Pre/Post Periods**. Assumes parallel trends. | **Structure**: Long format (one row per unit per time).<br>**Input**: Select `Treatment Col` (Group), `Outcome`, and `Time Period` (Pre/Post). | **Table**: View Interaction Coefficient.<br>**Interpretation**: A significant p-value (< 0.05) on the **Interaction Term** indicates a causal effect. The coefficient shows the absolute change in the outcome. |
-    | **Interrupted/Bayesian Time Series (ITS/BSTS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. Defaults to a 60-day prediction window. | **Scorecard & Plots**: ATE, Cumulative Effect, and Relative Lift (%).<br>**Interpretation**: Focus on the **95% Confidence Intervals** beneath the 3 headline metrics. If the CI does not cross zero, the effect is statistically significant. |
-    | **GeoLift (Synthetic Control via R)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data outputting MDE and Power (Defaults to 60-day testing).<br>2. **Impact Estimation**: Estimates true causal effect post-campaign (Defaults to Nov 1st dates). | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, review the unified **Statistical Summary Scorecard**. Focus on the overall test **P-value**. P < alpha indicates a significant campaign impact. |
+    | **Interrupted/Bayesian Time Series (ITS/BSTS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. | **Scorecard & Plots**: ATE, Cumulative Effect, and Relative Lift (%).<br>**Interpretation**: Focus on the **95% Confidence Intervals** beneath the 3 headline metrics. If the CI does not cross zero, the effect is statistically significant. |
+    | **GeoLift (Synthetic Control via R)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data outputting MDE and Power.<br>2. **Impact Estimation**: Estimates true causal effect post-campaign. | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, review the unified **Statistical Summary Scorecard**. Focus on the overall test **P-value**. P < alpha indicates a significant campaign impact. |
     
 
     ### 3. Export Data and Script
