@@ -2626,7 +2626,28 @@ with tab_quasi:
                 """)
                 st.divider()
                 
-                st.markdown(results['result']['summary'])
+                if 'metrics' in results['result']:
+                    metrics = results['result']['metrics']
+                    
+                    st.subheader("Statistical Summary")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Average Treatment Effect (ATT)", f"{metrics['avg_lift']:,.2f}")
+                    with col2:
+                        st.metric("Cumulative Impact", f"{metrics['cum_lift']:,.2f}")
+                    with col3:
+                        sig_color = "normal" if metrics['significant'] else "off"
+                        st.metric("P-Value", f"{metrics['p_val']:.4f}", delta="Significant" if metrics['significant'] else "Not Significant", delta_color=sig_color)
+                        
+                    direction = "increase" if metrics['cum_lift'] > 0 else "decrease"
+                    if metrics['significant']:
+                        sig_text = f"The results are **statistically significant** ($p = {metrics['p_val']:.4f} < {metrics['alpha']}$). "
+                        conclusion = f"This indicates that the intervention had a measurable and statistically significant **{direction}** on the target metric for **{metrics['treated_geo']}**."
+                    else:
+                        sig_text = f"The results are **NOT statistically significant** ($p = {metrics['p_val']:.4f} \ge {metrics['alpha']}$). "
+                        conclusion = f"This indicates that there is insufficient evidence to conclude the intervention had a meaningful impact on **{metrics['treated_geo']}**, as the observed differences fall within the expected noise of the synthetic control."
+                        
+                    st.info(f"**Interpretation:** During the post-intervention period, the **{metrics['treated_geo']}** market experienced an average estimated treatment effect of **{metrics['avg_lift']:,.2f}** per period, compounding to a total cumulative impact of **{metrics['cum_lift']:,.2f}**. {sig_text}{conclusion}")
                 
                 if 'plot_path' in results['result'] or 'att_plot_path' in results['result']:
                     col_plot1, col_plot2 = st.columns(2)
@@ -2642,6 +2663,8 @@ with tab_quasi:
                                 st.image(results['result']['att_plot_path'], caption="Average Treatment Effect on the Treated (ATT)", use_container_width=True)
                             except Exception as e:
                                 st.warning(f"Could not load ATT plot: {e}")
+                                
+                st.markdown(results['result']['summary'])
 
         # --- EXPORT SECTION ---
         st.divider()

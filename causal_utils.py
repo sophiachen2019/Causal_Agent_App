@@ -1314,16 +1314,6 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             full_summary = robjects.globalenv['full_summary_text'][0]
             
             report = f"""
-            ### GeoLift Analysis Results
-            **Treated Geography**: {treated_geo}
-            **Model Type**: {model}
-            
-            **Average Estimated Treatment Effect**: {avg_lift:.2f}
-            **Cumulative Lift**: {cum_lift:.2f}
-            **P-Value**: {p_val:.4f}
-            
-            **Statistically Significant (p < {alpha})?**: {significant}
-            
             #### Full Inference Summary
             ```text
             {full_summary}
@@ -1335,6 +1325,15 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             
             return {
                 "summary": report,
+                "metrics": {
+                    "avg_lift": float(avg_lift),
+                    "cum_lift": float(cum_lift),
+                    "p_val": float(p_val),
+                    "alpha": float(alpha),
+                    "treated_geo": treated_geo,
+                    "model": model,
+                    "significant": p_val < alpha
+                },
                 "plot_path": impact_plot_file,
                 "att_plot_path": att_plot_file
             }
