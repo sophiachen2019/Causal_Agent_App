@@ -1234,7 +1234,8 @@ def run_causal_impact_analysis(df, date_col, outcome_col, intervention_date, uni
 
 def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, intervention_date, 
                           treatment_duration=14, model="none", alpha=0.1, 
-                          confidence_intervals=False, stat_test="Total", covariates=None):
+                          confidence_intervals=False, stat_test="Total", covariates=None,
+                          fixed_effects=True, grid_size=250):
     """
     Runs GeoLift Analysis using rpy2 to bridge Python and Meta's GeoLift R package.
     """
@@ -1285,6 +1286,8 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
             robjects.globalenv['alpha_val'] = float(alpha)
             robjects.globalenv['calc_ci'] = bool(confidence_intervals)
             robjects.globalenv['test_stat'] = stat_test
+            robjects.globalenv['fixed_effects_val'] = bool(fixed_effects)
+            robjects.globalenv['grid_val'] = int(grid_size)
             
             if covariates:
                 robjects.globalenv['cov_names'] = robjects.StrVector(covariates)
@@ -1339,6 +1342,8 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
                                   treatment_start_time = treatment_start_idx,
                                   treatment_end_time = treatment_end_idx,
                                   model = model_name,
+                                  fixed_effects = fixed_effects_val,
+                                  grid_size = grid_val,
                                   alpha = alpha_val,
                                   ConfidenceIntervals = calc_ci,
                                   stat_test = test_stat)
@@ -1352,6 +1357,8 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
                                   treatment_start_time = treatment_start_idx,
                                   treatment_end_time = treatment_end_idx,
                                   model = model_name,
+                                  fixed_effects = fixed_effects_val,
+                                  grid_size = grid_val,
                                   alpha = alpha_val,
                                   ConfidenceIntervals = calc_ci,
                                   stat_test = test_stat)
@@ -1506,7 +1513,8 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
 
 def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cutoff_date=None, 
                       n_markets="1", lookback_window=1, model="none", alpha=0.1, side_of_test="two_sided",
-                      parallel=True, ns=1000, effect_size_mode="Full", normalize=False, covariates=None):
+                      parallel=True, ns=1000, effect_size_mode="Full", normalize=False, covariates=None,
+                      fixed_effects=True, dtw=0, correlations=False, cpic=1.0, budget=None):
     """
     Runs GeoLift Market Selection (Power Analysis) via rpy2 with performance optimizations.
     """
@@ -1586,6 +1594,11 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
             robjects.globalenv['parallel_run'] = bool(parallel)
             robjects.globalenv['ns_val'] = int(ns)
             robjects.globalenv['normalize_val'] = bool(normalize)
+            robjects.globalenv['fixed_effects_val'] = bool(fixed_effects)
+            robjects.globalenv['dtw_val'] = float(dtw)
+            robjects.globalenv['corr_val'] = bool(correlations)
+            robjects.globalenv['cpic_val'] = float(cpic)
+            robjects.globalenv['budget_val'] = float(budget) if budget is not None else robjects.NULL
             
             # Effect size handling
             if effect_size_mode == "Fast":
@@ -1618,6 +1631,11 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
                     time_id = "time",
                     lookback_window = lookback,
                     model = model_name,
+                    fixed_effects = fixed_effects_val,
+                    dtw = dtw_val,
+                    Correlations = corr_val,
+                    cpic = cpic_val,
+                    budget = budget_val,
                     alpha = alpha_val,
                     side_of_test = side,
                     parallel = parallel_run,
@@ -1639,6 +1657,11 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
                     X = cov_names,
                     lookback_window = lookback,
                     model = model_name,
+                    fixed_effects = fixed_effects_val,
+                    dtw = dtw_val,
+                    Correlations = corr_val,
+                    cpic = cpic_val,
+                    budget = budget_val,
                     alpha = alpha_val,
                     side_of_test = side,
                     parallel = parallel_run,

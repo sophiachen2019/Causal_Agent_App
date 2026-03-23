@@ -1088,7 +1088,7 @@ if st.session_state.get('analysis_run', False):
         
             # --- Step 1: Model ---
             st.subheader("1. Causal Model")
-            st.markdown("**Methodology:** Structural Causal Model (SCM) — *Pearl (2009)*")
+            st.markdown("**Methodology:** Structural Causal Model (SCM) — *[Pearl (2009)](https://doi.org/10.1017/CBO9780511803161)*")
             st.markdown("We define a Directed Acyclic Graph (DAG) $G = (V, E)$ where:")
             st.markdown(f"- $V$: Variables including Treatment (`{treatment}`), Outcome (`{outcome}`), and Confounders.")
             st.markdown("- $E$: Causal edges representing direct effects.")
@@ -1130,7 +1130,7 @@ if st.session_state.get('analysis_run', False):
 
             # --- Step 2: Identify ---
             st.subheader("2. Identification")
-            st.markdown("**Methodology:** Backdoor Criterion — *Pearl (2009)*")
+            st.markdown("**Methodology:** Backdoor Criterion — *[Pearl (2009)](https://doi.org/10.1017/CBO9780511803161)*")
             st.markdown("We aim to identify the causal effect $P(Y|do(T))$ from observational data $P(Y, T, X)$.")
             st.markdown("If a set of variables $X$ satisfies the Backdoor Criterion, we can use the **Adjustment Formula**:")
             st.latex(r"P(Y|do(T)) = \sum_X P(Y|T, X)P(X)")
@@ -1145,7 +1145,7 @@ if st.session_state.get('analysis_run', False):
                 use_logit = False # Initialize to avoid NameError in Refutation
                 estimate = None # Initialize to avoid UnboundLocalError
                 if estimation_method == "Linear Double Machine Learning (LinearDML)":
-                    st.markdown("#### Method: Double Machine Learning (DML) — *Chernozhukov et al. (2018)*")
+                    st.markdown("##### Methodology: Double Machine Learning (DML) — *[Chernozhukov et al. (2018)](https://doi.org/10.1111/ectj.12097)*")
                     st.markdown("DML removes the effect of confounders ($X$) from both treatment ($T$) and outcome ($Y$) using ML models.")
                 
                     st.markdown("**Step 1: Residualize Outcome**")
@@ -1182,7 +1182,7 @@ if st.session_state.get('analysis_run', False):
                         }
                     )
                 elif estimation_method == "Propensity Score Matching (PSM)":
-                    st.markdown("#### Method: Propensity Score Matching (PSM) — *Rosenbaum & Rubin (1983)*")
+                    st.markdown("#### Methodology: Propensity Score Matching (PSM) — *[Rosenbaum & Rubin (1983)](https://doi.org/10.1093/biomet/70.1.41)*")
                     if is_binary_outcome:
                         st.caption("ℹ️ **Binary Outcome**: Estimate represents Risk Difference (Difference in Proportions).")
                     st.markdown("PSM matches treated units with control units that have similar probability of receiving treatment.")
@@ -1202,7 +1202,7 @@ if st.session_state.get('analysis_run', False):
                     )
 
                 elif estimation_method == "Inverse Propensity Weighting (IPTW)":
-                    st.markdown("#### Method: Inverse Propensity Weighting (IPTW) — *Austin (2011)*")
+                    st.markdown("##### Methodology: Inverse Propensity Weighting (IPTW) — *[Austin (2011)](https://doi.org/10.1080/00273171.2011.568786)*")
                     if is_binary_outcome:
                         st.caption("ℹ️ **Binary Outcome**: Estimate represents Risk Difference (Weighted Difference in Proportions).")
                     st.markdown("IPTW re-weights the data to create a pseudo-population where treatment is independent of confounders.")
@@ -1223,7 +1223,7 @@ if st.session_state.get('analysis_run', False):
 
                 elif "Meta-Learner" in estimation_method:
                     learner_type = estimation_method.split(": ")[1]
-                    st.markdown(f"#### Method: {learner_type} — *Künzel et al. (2019)*")
+                    st.markdown(f"##### Methodology: {learner_type} — *[Künzel et al. (2019)](https://doi.org/10.1073/pnas.1804597116)*")
                 
                     if learner_type == "S-Learner":
                         st.markdown("S-Learner (Single Learner) treats treatment as a feature in a single ML model.")
@@ -1260,7 +1260,7 @@ if st.session_state.get('analysis_run', False):
                     )
 
                 elif estimation_method == "Generalized Random Forests (CausalForestDML)":
-                    st.markdown("#### Method: Generalized Random Forests (CausalForestDML) — *Wager & Athey (2018)*")
+                    st.markdown("##### Methodology: Generalized Random Forests (CausalForestDML) — *[Wager & Athey (2018)](https://doi.org/10.1080/01621459.2017.1319839)*")
                     st.markdown("Causal Forests extend Random Forests to estimate heterogeneous treatment effects (CATE) using an honest splitting criterion.")
                     st.latex(r"\hat{\tau}(x) = \frac{\sum \alpha_i(x) (Y_i - \hat{m}(X_i)) (T_i - \hat{e}(X_i))}{\sum \alpha_i(x) (T_i - \hat{e}(X_i))^2}")
                 
@@ -1281,14 +1281,9 @@ if st.session_state.get('analysis_run', False):
                         }
                     )
 
-                elif estimation_method == "Instrumental Variables (IV)":
-                    st.markdown("#### Method: Instrumental Variables (IV)")
-                    # Removed IV support
-                    st.error("Instrumental Variables (IV) method is not supported in this version.")
-                    st.stop()
-                
+
                 elif estimation_method == "Difference-in-Differences (DiD)":
-                    st.markdown("#### Method: Difference-in-Differences (DiD)")
+                    st.markdown("#### Methodology: Difference-in-Differences (DiD)")
                     
                     use_logit = False
                     if is_binary_outcome:
@@ -1382,7 +1377,7 @@ if st.session_state.get('analysis_run', False):
 
 
                 elif estimation_method == "Linear/Logistic Regression (OLS/Logit)":
-                    st.markdown("#### Method: OLS/Logit")
+                    st.markdown("##### Methodology: OLS/Logit")
                     
                     use_logit = False
                     if is_binary_outcome:
@@ -1643,9 +1638,6 @@ if st.session_state.get('analysis_run', False):
                                         "fit_params": {}
                                     }
                                 )
-                            elif estimation_method == "Instrumental Variables (IV)":
-                                    # Removed IV support
-                                    continue # Skip this iteration if IV is selected
 
                             elif estimation_method == "Linear/Logistic Regression (OLS/Logit)":
                                     est_boot = model_boot.estimate_effect(
@@ -1939,18 +1931,18 @@ if st.session_state.get('analysis_run', False):
             if estimation_method == "Difference-in-Differences (DiD)" or (is_binary_outcome and use_logit):
                 st.warning("Refutation tests are not currently supported for this method/configuration (Manual Implementation).")
             else:
-                st.markdown("### 📖 Methodology: Robustness & Refutation — *Sharma & Kiciman (2020)*")
+                st.markdown("##### 📖 Methodology: Robustness & Refutation — *[Sharma & Kiciman (2020)](https://arxiv.org/abs/2011.04216)*")
                 st.markdown("""
                 Robustness checks are essential to validate that the causal estimate is not a result of chance or model misspecification. 
-                We implement the refutation framework proposed by **Sharma & Kiciman (2020)** in the `DoWhy` library.
+                We implement the refutation framework proposed by **[Sharma & Kiciman (2020)](https://arxiv.org/abs/2011.04216)** in the `DoWhy` library.
                 """)
                 
                 st.markdown("**1. Random Common Cause Test**")
                 st.markdown("We add a random variable $W_{random}$ as a common cause to the dataset. Since $W_{random}$ is independent of the true process, the new estimate should not change significantly.")
                 st.latex(r"ATE_{new} \approx ATE_{original}")
                 
-                st.markdown("**2. Placebo Treatment Refuter — *Angrist & Pischke (2009)* **")
-                st.markdown("Based on the 'Placebo Test' framework popularized in econometrics by **Angrist & Pischke (2009)**, we replace the true treatment variable $T$ with an independent random variable $T_{placebo}$. Since the placebo treatment is random, it should have no effect on the outcome.")
+                st.markdown("**2. Placebo Treatment Refuter**")
+                st.markdown("Based on the 'Placebo Test' framework popularized in econometrics by **[Angrist & Pischke (2009)](https://www.researchgate.net/publication/51992844_Mostly_Harmless_Econometrics_An_Empiricist's_Companion)**, we replace the true treatment variable $T$ with an independent random variable $T_{placebo}$. Since the placebo treatment is random, it should have no effect on the outcome.")
                 st.latex(r"ATE_{placebo} \approx 0")
 
                 try:
@@ -2311,7 +2303,13 @@ with tab_quasi:
                 pow_parallel = st.checkbox("Enable Parallel Processing", value=True, help="Uses multiple CPU cores to speed up simulations.")
 
                 st.write("---")
-                st.markdown("**🛡️ Performance Overrides (Speed vs. Precision)**")
+                st.markdown("**🛡️ Performance & Precision Overrides**")
+                pow_fixed_effects = st.checkbox("Fixed Effects", value=True, help="Controls for geographic and time unobservables.")
+                pow_dtw = st.number_input("Dynamic Time Warping (DTW)", value=0, help="Addresses misaligned time-series data.")
+                pow_correlations = st.checkbox("Analyze Correlations", value=False, help="Uses correlated features to improve fit.")
+                pow_cpic = st.number_input("Cost Per Incremental Conversion (CPIC)", value=1.0)
+                pow_budget_input = st.number_input("Budget (Optional)", value=0.0)
+                pow_budget = pow_budget_input if pow_budget_input > 0 else None
                 pow_es_mode = st.radio("Simulation Density", ["Fast (0%, 10%)", "Full (0%, 5%, 10%, 15%, 20%)"], index=0, 
                                         help="Fast mode tests fewer points, significantly reducing runtime for exploration.")
                 pow_ns = st.selectbox("Resamples (NS)", [100, 1000], index=0, 
@@ -2337,7 +2335,12 @@ with tab_quasi:
                             ns=pow_ns,
                             effect_size_mode=pow_es_mode.split()[0], # "Fast" or "Full",
                             normalize=pow_normalize,
-                            covariates=pow_covariates
+                            covariates=pow_covariates,
+                            fixed_effects=pow_fixed_effects,
+                            dtw=pow_dtw,
+                            correlations=pow_correlations,
+                            cpic=pow_cpic,
+                            budget=pow_budget
                         )
                         
                         st.session_state.quasi_results = {
@@ -2392,6 +2395,8 @@ with tab_quasi:
                 est_alpha = st.slider("Significance Level (Alpha)", 0.01, 0.2, 0.1, help="Threshold for statistical significance.", key="gl_alpha_est")
                 est_ci = st.checkbox("Calculate Confidence Intervals", value=True, help="Adds uncertainty estimation but increases runtime.", key="gl_ci_est")
                 est_test = st.selectbox("Statistical Test", ["Total", "Negative", "Positive"], index=0, help="'Total' is standard for overall lift.", key="gl_test_est")
+                est_fixed_effects = st.checkbox("Fixed Effects", value=True, key="gl_fe_est")
+                est_grid_size = st.number_input("Grid Size (CI Precision)", value=250, key="gl_grid_est")
     
             if st.button("Run GeoLift Analysis", type="primary"):
                 st.write("---")
@@ -2405,7 +2410,9 @@ with tab_quasi:
                             alpha=est_alpha,
                             confidence_intervals=est_ci,
                             stat_test=est_test,
-                            covariates=est_covariates
+                            covariates=est_covariates,
+                            fixed_effects=est_fixed_effects,
+                            grid_size=est_grid_size
                         )
                         st.session_state.quasi_results = {
                             'method': 'GeoLift (Synthetic Control)',
@@ -2431,7 +2438,7 @@ with tab_quasi:
         
         if quasi_method_run == "Difference-in-Differences (DiD)":
             # --- Methodology and Formula ---
-            st.markdown("### 📖 Methodology: Difference-in-Differences — *Angrist & Pischke (2009)*")
+            st.markdown("### 📖 Methodology: Difference-in-Differences — *[Angrist & Pischke (2009)](https://www.mostlyharmlesseconometrics.com/)*")
             st.markdown(r"""
             **Difference-in-Differences (DiD)** is a quasi-experimental design that uses longitudinal data from treatment and control groups to obtain an appropriate counterfactual to estimate a causal effect.
             
@@ -2466,7 +2473,7 @@ with tab_quasi:
         elif quasi_method_run == "CausalImpact (Bayesian Time Series)":
             # --- Methodology and Formula ---
             st.markdown(r"""
-            **CausalImpact** is built on Bayesian Structural Time Series (BSTS) models, as detailed in **Scott and Varian (2014)**. It decomposes the time series into trend, seasonal, and regression components, using a state-space formulation to estimate the counterfactual.
+            **CausalImpact** is built on Bayesian Structural Time Series (BSTS) models, as detailed in **[Scott and Varian (2014)](https://doi.org/10.1504/IJMMNO.2014.059942)**. It decomposes the time series into trend, seasonal, and regression components, using a state-space formulation to estimate the counterfactual.
             
             **The Observation Equation:**
             """)
@@ -2530,9 +2537,9 @@ with tab_quasi:
                 GeoLift's Market Selection uses historical data to identify the best candidate markets for an experiment. It evaluates possible treated units by checking their pre-treatment fit (using Synthetic Control) and their statistical power (calculating the Minimum Detectable Effect).
                 
                 **Methodology References:**
-                - Augmented Synthetic Control Method (*Ben-Michael, Feller, and Roth, 2021*)
-                - Generalized Synthetic Control Method (GSYN) (*Yiqing Xu, 2017*)
-                - Meta Open Source GeoLift implementation (*Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023*)
+                - Augmented Synthetic Control Method (*[Ben-Michael, Feller, and Roth, 2021](https://doi.org/10.1080/01621459.2021.1929245)*)
+                - Generalized Synthetic Control Method (GSYN) (*[Yiqing Xu, 2017](https://doi.org/10.1017/pan.2016.2)*)
+                - Meta Open Source GeoLift implementation (*[Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023](https://github.com/facebookincubator/GeoLift)*)
                 
                 **Augmentation Models**:
                 - **Ridge**: Adds a penalty to the synthetic control weights to handle smaller datasets. Highly recommended for datasets with few locations or noisy signals.
@@ -2599,8 +2606,8 @@ with tab_quasi:
                 GeoLift uses the Augmented Synthetic Control Method (ASCM) to estimate the causal effect of an intervention at the geographic level. It constructs a "synthetic" version of the treated location by finding a weighted combination of untreated locations that best matches the pre-treatment time series.
                 
                 *Methodology References:* 
-                - Augmented Synthetic Control Method (*Ben-Michael, Feller, and Roth, 2021*)
-                - Meta Open Source GeoLift implementation (*Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023*)
+                - Augmented Synthetic Control Method (*[Ben-Michael, Feller, and Roth, 2021](https://doi.org/10.1080/01621459.2021.1929245)*)
+                - Meta Open Source GeoLift implementation (*[Arturo Deza, Nicolas Cruces, and Jose Benitez, 2023](https://github.com/facebookincubator/GeoLift)*)
                 
                 **Formula Definition:**
                 Let region $1$ be treated and $2, \dots, N$ be the donor pool. ASCM seeks weights $W$ to minimize:
