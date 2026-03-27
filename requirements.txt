@@ -10,6 +10,7 @@ statsmodels
 rpy2
 
 # --- Metadata ---
+# Release: 4.4.0 | 2026-03-26 | Modernized UI with custom theme configuration, and new HTML-based user guide.
 # Release: 4.3.0 | 2026-03-22 | Added missing advanced parameters for GeoLift analysis, and embedded paper reference links.
 # Release: 4.2.0 | 2026-03-21 | Standardized inference scorecards for GeoLift and CausalImpact, added underlying time series UI data tables, and enhanced Python script exporter template parameters.
 # Release: 4.1.0 | 2026-03-15 | Added covariate support for GeoLift models and migrated CausalImpact to the official R implementation for greater accuracy.

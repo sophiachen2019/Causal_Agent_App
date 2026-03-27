@@ -1,0 +1,196 @@
+<div class="user-guide-container">
+    <style>
+        .user-guide-container {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #334155;
+            line-height: 1.6;
+            padding: 1rem 0;
+        }
+        .user-guide-container h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        .user-guide-container h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .user-guide-container h4 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #334155;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .user-guide-container p {
+            margin-bottom: 1rem;
+        }
+        .user-guide-container ul {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
+        .user-guide-container li {
+            margin-bottom: 0.5rem;
+        }
+        .user-guide-container .highlight {
+            background-color: #f1f5f9;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid #3b82f6;
+            margin-bottom: 1.5rem;
+        }
+        .user-guide-container .grid-table {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        @media (min-width: 768px) {
+            .user-guide-container .grid-table {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        .user-guide-container .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .user-guide-container .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .user-guide-container .card h5 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #0f172a;
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .user-guide-container .badge {
+            display: inline-block;
+            padding: 0.1rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #fff;
+            background-color: #64748b;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+        .user-guide-container .badge.blue { background-color: #3b82f6; }
+        .user-guide-container .badge.green { background-color: #10b981; }
+        .user-guide-container .badge.purple { background-color: #8b5cf6; }
+        .user-guide-container .badge.orange { background-color: #f59e0b; }
+        .user-guide-container code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            background-color: #f1f5f9;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            color: #db2777;
+        }
+    </style>
+
+    <h2>Welcome to the Causal Agent App</h2>
+    <p>This application is designed to help you estimate causal effects from observational and A/B testing data using advanced statistical methods. You may also receive help from our <strong>AI Assistant</strong> in the dashboard.</p>
+
+    <div class="highlight">
+        <h4>1. Data Preparation</h4>
+        <p><strong>Simulated Data:</strong> If you don't have a dataset, select "Simulated Data" to explore the app's features. We provide two distinct sets of simulated data: one for Observational Analysis and one for Quasi-Experimental Analysis.</p>
+        <p><strong>Upload Data:</strong> Upload your own CSV file. Ensure your data contains:</p>
+        <ul>
+            <li><strong>Treatment Column:</strong> The variable indicating the intervention (e.g., <code>Feature_Adoption</code>, <code>Marketing_Campaign</code>).</li>
+            <li><strong>Outcome Column:</strong> The metric you want to influence (e.g., <code>Account_Value</code>, <code>Conversion_Rate</code>).</li>
+            <li><strong>Confounders:</strong> Variables that influence both treatment and outcome (e.g., <code>Customer_Segment</code>, <code>Region</code>).</li>
+        </ul>
+        <p><strong>Data Preprocessing features:</strong> Auto-Convert Booleans, Missing Value Imputation, Winsorization, Log Transformation, Standardization, Variable Bucketing, Data Filtering.</p>
+    </div>
+
+    <h3>2. Step-by-Step Causal Analysis</h3>
+    <p>Select the analysis type based on your data structure. Observational for standard cross-sectional data, and Quasi-Experimental for time-series / natural experiments.</p>
+
+    <h4>A. Observational Analysis</h4>
+    <p>Use this for standard cross-sectional analysis or when you have user-level data without a time-series dimension.</p>
+    
+    <div class="grid-table">
+        <div class="card">
+            <h5>Linear/Logistic Regression <span class="badge blue">OLS / Logit</span></h5>
+            <p><strong>Use Case:</strong> Simple observational studies or standard A/B tests with few control variables.</p>
+            <p><strong>Input:</strong> Cross-sectional. Select <code>Treatment</code> & <code>Outcome</code>. Add <code>Confounders</code> to control for bias.</p>
+            <p><strong>Result:</strong> <em>ATE & P-value</em>. A p-value &lt; 0.05 means the effect is statistically significant.</p>
+        </div>
+        <div class="card">
+            <h5>Matching & Weighting <span class="badge green">PSM / IPTW</span></h5>
+            <p><strong>Use Case:</strong> When treatment/control groups are "unbalanced" (e.g., test users are older than control).</p>
+            <p><strong>Input:</strong> Requires <strong>Binary Treatment</strong>. Uses Confounders to match or re-weight.</p>
+            <p><strong>Result:</strong> <em>Adjusted ATE</em>. Focus on the <strong>95% Confidence Interval</strong>.</p>
+        </div>
+        <div class="card">
+            <h5>Double Machine Learning <span class="badge purple">DML</span></h5>
+            <p><strong>Use Case:</strong> For high-dimensional data or finding "Who" the treatment works best for (HTE).</p>
+            <p><strong>Input:</strong> Uses ML to remove confounding noise from treatment and outcome.</p>
+            <p><strong>Result:</strong> <em>CATE & HTE Results</em>. View the Effect Modification table for segment effects.</p>
+        </div>
+        <div class="card">
+            <h5>Meta-Learners <span class="badge orange">S/T-Learner</span></h5>
+            <p><strong>Use Case:</strong> Advanced ML approach to estimate Individual Treatment Effects (ITE) and segmentation.</p>
+            <p><strong>Input:</strong> Highly flexible model learning from treatment.</p>
+            <p><strong>Result:</strong> <em>ITE & Segment Analysis</em>. Useful for Personalization.</p>
+        </div>
+    </div>
+
+    <h4>B. Quasi-Experimental Analysis</h4>
+    <p>Use this when you have time-series data (Pre/Post periods) or natural experiments.</p>
+    
+    <div class="grid-table">
+        <div class="card">
+            <h5>Difference-in-Differences <span class="badge blue">DiD</span></h5>
+            <p><strong>Use Case:</strong> Measuring impact when you have a <strong>Control Group</strong> and <strong>Pre/Post Periods</strong>.</p>
+            <p><strong>Input:</strong> Long format data. Select <code>Treatment</code>, <code>Outcome</code>, and <code>Time Period</code>.</p>
+            <p><strong>Result:</strong> View Interaction Coefficient and P-value.</p>
+        </div>
+        <div class="card">
+            <h5>Time Series <span class="badge green">ITS / BSTS</span></h5>
+            <p><strong>Use Case:</strong> Measuring impact on a time series. Supports Panel Data, Filtered Unit, or aggregated data.</p>
+            <p><strong>Input:</strong> Select <code>Date</code>, <code>Outcome</code>, and <code>Intervention Date</code>. Add covariates if available.</p>
+            <p><strong>Result:</strong> Scorecard & Plots. Focus on the 95% Confidence Intervals.</p>
+        </div>
+        <div class="card">
+            <h5>GeoLift <span class="badge purple">Synthetic Control</span></h5>
+            <p><strong>Use Case:</strong> Geographic split-testing optimized for market-level A/B testing.</p>
+            <p><strong>Input:</strong> Panel Data (Date & Location).</p>
+            <p><strong>Result:</strong> Statistical Summary Scorecard (Estimation) or Power Curves (Selection).</p>
+        </div>
+    </div>
+
+    <h3>3. Export Data and Script</h3>
+    <ul>
+        <li><strong>View Generated Script:</strong> Preview the full Python code directly in the app.</li>
+        <li><strong>Download Python Script:</strong> Get a standalone Python file containing the analysis to reproduce the results locally.</li>
+    </ul>
+
+    <h3>4. AI Assistant (Chatbot)</h3>
+    <p>The <strong>AI Assistant</strong> tab provides an interactive way to explore your data and methodology.</p>
+    <ul>
+        <li><strong>Summarize Data:</strong> Get an instant overview of columns, missing values, and stats.</li>
+        <li><strong>Suggest Method:</strong> Ask the AI to recommend the best causal estimator for your specific variables.</li>
+        <li><strong>Educational Support:</strong> Ask questions like "What is LinearDML?" or "How do I interpret the ATE?".</li>
+    </ul>
+
+    <h3>5. Version History</h3>
+</div>

@@ -234,17 +234,72 @@ def convert_bool_to_int(df):
 # --- Streamlit UI ---
 st.set_page_config(page_title="Causal Inference Application", layout="wide")
 
-# Header Layout: Title on Left, Feedback on Right
-col_header, col_feedback = st.columns([5, 1])
+# --- UI Modernization Injection ---
+st.markdown("""
+<style>
+    /* Modernize standard Streamlit elements */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div,
+    .stNumberInput > div > div > input {
+        border-radius: 8px;
+        box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02) !important;
+    }
+    div[data-testid="stExpander"] {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px 0 rgba(0,0,0,0.05);
+        background-color: #ffffff;
+    }
+    /* Tabs styling */
+    button[data-baseweb="tab"] {
+        border-radius: 8px 8px 0 0;
+        font-weight: 600;
+    }
+    /* DataFrame subtle shadows */
+    [data-testid="stDataFrame"] {
+        box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-with col_header:
-    st.title("🤖 Causal Inference Application")
+col_title, col_right = st.columns([7, 1])
+
+with col_title:
+    st.markdown("<h1 style='margin-top: -20px; font-size: 2.5rem;'>Causal Inference Application</h1>", unsafe_allow_html=True)
     st.markdown("**Builder:** [Sophia Chen](https://www.shunqinchen.com?utm_source=streamlit&utm_medium=application&utm_campaign=causal_inference) ")
 
-with col_feedback:
-    # Feedback Popover to save space
-    st.write("") # Spacer to align with title
-    st.write("") 
+with col_right:
+    import base64
+    with open("logo.png", "rb") as logo_file:
+        logo_base64 = base64.b64encode(logo_file.read()).decode()
+    st.markdown(f'<div style="text-align: right;"><img src="data:image/png;base64,{logo_base64}" style="width: 70px; height: auto; margin-top: -10px; margin-bottom: 5px;"></div>', unsafe_allow_html=True)
+
+    # Float popover down to align horizontally with the Streamlit tabs row
+    st.markdown("""
+        <style>
+        div[data-testid="column"]:last-child div[data-testid="stPopover"] {
+            position: absolute;
+            right: 0px;
+            transform: translateY(4.0rem);
+            z-index: 999;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Feedback Popover
     with st.popover("📝 Feedback"):
         st.markdown("### Send us your thoughts!")
         with st.form("feedback_form"):
@@ -987,80 +1042,9 @@ with tab_observational:
 # TAB 1: User Guide
 # ==========================================
 with tab_guide:
-    st.header("User Guide")
-    
-    st.markdown("""
-    ## Welcome to the Causal Agent App
-    This application is designed to help you estimate causal effects from observational and A/B testing data using advanced statistical methods. You may also receive help from our **AI Assistant** in the dashboard.
-    
-    ### 1. Data Preparation
-    **Simulated Data**: If you don't have a dataset, select "Simulated Data" to explore the app's features. We provide two distinct sets of simulated data: one for Observational Analysis and one for Quasi-Experimental Analysis.
-    
-    **Upload Data**: Upload your own CSV file. Ensure your data contains:
-    - **Treatment Column**: The variable indicating the intervention (e.g., `Feature_Adoption`, `Marketing_Campaign`).
-    - **Outcome Column**: The metric you want to influence (e.g., `Account_Value`, `Conversion_Rate`).
-    - **Confounders**: Variables that influence both treatment and outcome (e.g., `Customer_Segment`, `Region`).
-    - **Data Preprocessing**:
-        - **Auto-Convert Booleans**: Automatically converts TRUE/FALSE columns to 1/0.
-        - **Missing Value Imputation**: Fill missing data using mean, median, or custom values.
-        - **Winsorization**: Cap extreme outliers to reduce noise.
-        - **Log Transformation**: Apply log transform to skewed variables.
-        - **Standardization**: Scale variables to mean 0 and variance 1.
-        - **Variable Bucketing**: Create categorical bins from numerical variables (e.g., Age Groups).
-        - **Data Filtering**: Filter your dataset based on specific conditions (e.g., Region == 'Region_1').
-    - **Exploratory Analysis**:
-        - **Data Preview**: View your raw and processed data.
-        - **Correlation Matrix**: Analyze relationships between numeric variables.
-        - **Chart Builder**: Create custom visualizations with **Aggregation** (Mean, Sum, Count, Median, Min, Max).
-
-    ### 2. Step-by-Step Causal Analysis
-    **Observational Analysis**:
-    - **Methods**: OLS, Propensity Score Matching, IP Weighting, Double Machine Learning (DML), and Meta-Learners.
-    - **Refutation**: Automatically tests the robustness of your results (Random Common Cause, Placebo Treatment, Data Subset).
-
-    **Quasi-Experimental Analysis**:
-    - **Difference-in-Differences (DiD)**: Compare the change in outcome for a treatment group vs a control group in pre/post periods.
-    - **Interrupted/Bayesian Time Series (ITS/BSTS)**: specific for Time Series. 
-        - Predicts the counterfactual using a Bayesian Structural Time Series model.
-        - **Control Variables**: Select external predictors (Covariates) like "Marketing Spend" to improve model accuracy.
-        - **Synthetic Control**: Run as "Panel Data" to use other units as controls.
-    - **GeoLift**: Geographic split-testing (Synthetic Control) optimized for market-level A/B testing.
-
-    #### A. Observational Analysis
-    Use this for standard cross-sectional analysis or when you have user-level data without a time-series dimension.
-    
-    | Method | Use Case | Input Data Structure & Instruction | Output & Results Interpretation |
-    | :--- | :--- | :--- | :--- |
-    | **Linear/Logistic Regression (OLS/Logit)** | Simple observational studies or standard A/B tests with few control variables. | **Structure**: Cross-sectional.<br>**Input**: Select `Treatment` and `Outcome`. Add `Confounders` to control for bias. | **ATE & P-value**: Overall impact.<br>**Interpretation**: A p-value < 0.05 means the effect is statistically significant. Logit models show **Odds Ratios**. |
-    | **Matching & Weighting (PSM/IPTW)** | When treatment/control groups are "unbalanced" (e.g., test users are older/more active than control). | **Structure**: Requires **Binary Treatment**.<br>**Input**: Uses Confounders to match similar users or re-weight the population. | **ATE (Adjusted)**: Effect after balancing.<br>**Interpretation**: Focus on the **95% Confidence Interval**. If it does not include zero, the result is significant. |
-    | **Double Machine Learning (Linear/CausalForest DML)** | For high-dimensional data (many controls) or finding "Who" the treatment works best for (HTE). | **Structure**: Handles non-linearities.<br>**Input**: Uses ML to remove confounding noise from both treatment and outcome. | **CATE & HTE Results**: Specific segment effects.<br>**Interpretation**: View the **Effect Modification** table to identify which user features (e.g., Region, Tenure) drive the highest lift. |
-    | **Meta-Learners (S/T-Learner)** | Advanced ML approach to estimate Individual Treatment Effects (ITE) and segmentation. | **Structure**: Highly flexible.<br>**Input**: Compares estimated success with vs. without treatment for every single row. | **ITE & Segment Analysis**: Granular lift.<br>**Interpretation**: Useful for **Personalization** (targeting users with high individual predicted lift). |
-
-
-
-    #### B. Quasi-Experimental Analysis
-    Use this when you have time-series data (Pre/Post periods) or natural experiments.
-
-    | Method | Use Case | Input Data Structure & Instruction | Output & Results Interpretation |
-    | :--- | :--- | :--- | :--- |
-    | **Difference-in-Differences (DiD)** | Measuring impact when you have a **Control Group** and **Pre/Post Periods**. Assumes parallel trends. | **Structure**: Long format (one row per unit per time).<br>**Input**: Select `Treatment Col` (Group), `Outcome`, and `Time Period` (Pre/Post). | **Table**: View Interaction Coefficient.<br>**Interpretation**: A significant p-value (< 0.05) on the **Interaction Term** indicates a causal effect. The coefficient shows the absolute change in the outcome. |
-    | **Interrupted/Bayesian Time Series (ITS/BSTS)** | Measuring impact on a time series. Supports **Panel Data** (Synthetic Control), **Filtered Unit Analysis**, or simple aggregate pre/post time series. | **Structure**: User-level or Panel data.<br>**Input**: Select `Date Col`, `Outcome`, and `Intervention Date`.<br>**Filtering**: Select a `Unit Identifier` and `Target Unit` to analyze a specific group. | **Scorecard & Plots**: ATE, Cumulative Effect, and Relative Lift (%).<br>**Interpretation**: Focus on the **95% Confidence Intervals** beneath the 3 headline metrics. If the CI does not cross zero, the effect is statistically significant. |
-    | **GeoLift (Synthetic Control)** | Geographic split-testing (e.g., ad campaigns testing specifically in Chicago vs the rest of the US) where user-level randomization is not possible. | **Structure**: Panel Data (one row per Date per Location).<br>**Modes**: <br>1. **Market Selection**: Finds the best test markets using historical data outputting MDE and Power.<br>2. **Impact Estimation**: Estimates true causal effect post-campaign. | **Diagnostic Plots & Summary**: View Power Curves (Selection) or ATT plots (Estimation).<br>**Interpretation**: In Impact Estimation, review the unified **Statistical Summary Scorecard**. Focus on the overall test **P-value**. P < alpha indicates a significant campaign impact. |
-    
-
-    ### 3. Export Data and Script
-    - **View Generated Script**: Preview the full Python code directly in the app.
-    - **Download Python Script**: Get a standalone Python file containing the analysis. You can run this locally to reproduce the results or integrate it into your pipeline.
-    
-    ### 4. AI Assistant (Chatbot)
-    The **AI Assistant** tab provides an interactive way to explore your data and methodology.
-    - **Summarize Data**: Get an instant overview of columns, missing values, and stats.
-    - **Suggest Method**: Ask the AI to recommend the best causal estimator for your specific variables.
-    - **Educational Support**: Ask questions like "What is LinearDML?" or "How do I interpret the ATE?".
-    
-    ### 5. Version History
-
-    """, unsafe_allow_html=True)
+    with open("user_guide.html", "r", encoding="utf-8") as f:
+        user_guide_html = f.read()
+    st.html(user_guide_html)
     
     if history:
         # Display Latest Version
