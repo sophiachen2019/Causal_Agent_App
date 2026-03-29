@@ -131,26 +131,26 @@
         <div class="card">
             <h5>Linear/Logistic Regression <span class="badge blue">OLS / Logit</span></h5>
             <p><strong>Use Case:</strong> Simple observational studies or standard A/B tests with few control variables.</p>
-            <p><strong>Input:</strong> Cross-sectional. Select <code>Treatment</code> & <code>Outcome</code>. Add <code>Confounders</code> to control for bias.</p>
-            <p><strong>Result:</strong> <em>ATE & P-value</em>. A p-value &lt; 0.05 means the effect is statistically significant.</p>
+            <p><strong>Input:</strong> Select <code>Treatment</code> & <code>Outcome</code>. Add <code>Confounders</code>. Logit is automatically used for binary outcomes.</p>
+            <p><strong>Result:</strong> <em>ATE, P-value & Confidence Intervals</em>. A p-value &lt; 0.05 means the effect is statistically significant.</p>
         </div>
         <div class="card">
             <h5>Matching & Weighting <span class="badge green">PSM / IPTW</span></h5>
             <p><strong>Use Case:</strong> When treatment/control groups are "unbalanced" (e.g., test users are older than control).</p>
-            <p><strong>Input:</strong> Requires <strong>Binary Treatment</strong>. Uses Confounders to match or re-weight.</p>
-            <p><strong>Result:</strong> <em>Adjusted ATE</em>. Focus on the <strong>95% Confidence Interval</strong>.</p>
+            <p><strong>Input:</strong> Requires <strong>Binary Treatment</strong> & <code>Outcome</code>. Add <code>Confounders</code> to match/re-weight.</p>
+            <p><strong>Result:</strong> <em>Adjusted ATE, P-value & Confidence Intervals</em>.</p>
         </div>
         <div class="card">
             <h5>Double Machine Learning <span class="badge purple">DML</span></h5>
             <p><strong>Use Case:</strong> For high-dimensional data or finding "Who" the treatment works best for (HTE).</p>
-            <p><strong>Input:</strong> Uses ML to remove confounding noise from treatment and outcome.</p>
-            <p><strong>Result:</strong> <em>CATE & HTE Results</em>. View the Effect Modification table for segment effects.</p>
+            <p><strong>Input:</strong> Select <code>Treatment</code>, <code>Outcome</code>, & <code>Confounders</code> (used as Effect Modifiers).</p>
+            <p><strong>Result:</strong> <em>ATE & CATE (HTE)</em>. View the Effect Modification table for segment effects.</p>
         </div>
         <div class="card">
             <h5>Meta-Learners <span class="badge orange">S/T-Learner</span></h5>
             <p><strong>Use Case:</strong> Advanced ML approach to estimate Individual Treatment Effects (ITE) and segmentation.</p>
-            <p><strong>Input:</strong> Highly flexible model learning from treatment.</p>
-            <p><strong>Result:</strong> <em>ITE & Segment Analysis</em>. Useful for Personalization.</p>
+            <p><strong>Input:</strong> Select <code>Treatment</code>, <code>Outcome</code>, & <code>Confounders</code> (used as Effect Modifiers).</p>
+            <p><strong>Result:</strong> <em>ITE / CATE</em>. Useful for Personalization.</p>
         </div>
     </div>
 
@@ -161,20 +161,20 @@
         <div class="card">
             <h5>Difference-in-Differences <span class="badge blue">DiD</span></h5>
             <p><strong>Use Case:</strong> Measuring impact when you have a <strong>Control Group</strong> and <strong>Pre/Post Periods</strong>.</p>
-            <p><strong>Input:</strong> Long format data. Select <code>Treatment</code>, <code>Outcome</code>, and <code>Time Period</code>.</p>
-            <p><strong>Result:</strong> View Interaction Coefficient and P-value.</p>
+            <p><strong>Input:</strong> Select <code>Treatment</code>, <code>Outcome</code>, <code>Time Period (0=Pre, 1=Post)</code>, and <code>Control Variables</code>. Logit option for binary outcome.</p>
+            <p><strong>Result:</strong> DiD Estimation Results (Interaction Coefficient & P-value).</p>
         </div>
         <div class="card">
             <h5>CausalImpact <span class="badge green">ITS / BSTS</span></h5>
             <p><strong>Use Case:</strong> Measuring impact on a time series. Supports Panel Data, Filtered Unit, or aggregated data.</p>
-            <p><strong>Input:</strong> Select <code>Date</code>, <code>Outcome</code>, and <code>Intervention Date</code>. Add covariates if available.</p>
-            <p><strong>Result:</strong> Scorecard & Plots. Focus on the 95% Confidence Intervals.</p>
+            <p><strong>Input:</strong> Select <code>Date</code>, <code>Outcome</code>, <code>Intervention Date</code>. Add <code>Control Variables</code> or specify a <code>Unit Col</code> for panel/synthetic control mode.</p>
+            <p><strong>Result:</strong> BSTS results showing credible intervals and actual vs. predicted plots.</p>
         </div>
         <div class="card">
             <h5>GeoLift <span class="badge purple">Synthetic Control</span></h5>
             <p><strong>Use Case:</strong> Geographic split-testing optimized for market-level A/B testing.</p>
-            <p><strong>Input:</strong> Panel Data (Date & Location).</p>
-            <p><strong>Result:</strong> Statistical Summary Scorecard (Estimation) or Power Curves (Selection).</p>
+            <p><strong>Input:</strong> Select <code>Date</code>, <code>Geography</code>, <code>Outcome</code>, and <code>Covariates</code>. Modes: Power Analysis (Selection) & Impact Estimation (Post-Test).</p>
+            <p><strong>Result:</strong> Market Selection/Power Curves or Post-Test Impact Estimation Scorecards.</p>
         </div>
     </div>
 
