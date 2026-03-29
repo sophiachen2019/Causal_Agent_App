@@ -67,6 +67,9 @@ def simulate_bsts_demo_data():
         region_df = pd.DataFrame({
             'Date': date_range, 'Region': region, 'Daily_Revenue': metric,
             'Marketing_Spend': np.random.normal(50, 5, total_days),
+            'app_downloads': np.random.normal(100, 10, total_days) + weekly_seasonality,
+            'website_traffic': np.random.normal(500, 50, total_days) + monthly_seasonality,
+            'social_media_mentions': np.random.poisson(20, total_days),
             'Is_Post_Intervention': (np.arange(total_days) >= intervention_day).astype(int),
             'Is_Treated_Region': 1 if region == 'Region_1' else 0
         })
@@ -1480,31 +1483,28 @@ def run_geolift_analysis(df, date_col, geo_col, treated_geo, kpi_col, interventi
                 plot_df = pd.read_csv(csv_file)
                 
             return {
-                "summary": report,
+                "summary": full_summary,
                 "plot_df": plot_df,
-                "result": {
-                    "is_power_analysis": False,
-                    "metrics": {
-                        "avg_lift": float(avg_lift),
-                        "cum_lift": float(cum_lift),
-                        "p_val": float(p_val),
-                        "alpha": float(alpha),
-                        "treated_geo": treated_geo,
-                        "model": model,
-                        "significant": p_val < alpha,
-                        "perc_lift": float(perc_lift_decimal),
-                        "ate_lower": float(ate_lower) if ate_lower else None,
-                        "ate_upper": float(ate_upper) if ate_upper else None,
-                        "cum_lower": float(cum_lower) if cum_lower else None,
-                        "cum_upper": float(cum_upper) if cum_upper else None,
-                        "rel_lower": float(rel_lower) if rel_lower else None,
-                        "rel_upper": float(rel_upper) if rel_upper else None,
-                        "has_ci": bool(has_ci)
-                    },
-                    "summary": full_summary,
-                    "plot_path": impact_plot_file,
-                    "att_plot_path": att_plot_file
-                }
+                "is_power_analysis": False,
+                "metrics": {
+                    "avg_lift": float(avg_lift),
+                    "cum_lift": float(cum_lift),
+                    "p_val": float(p_val),
+                    "alpha": float(alpha),
+                    "treated_geo": treated_geo,
+                    "model": model,
+                    "significant": p_val < alpha,
+                    "perc_lift": float(perc_lift_decimal),
+                    "ate_lower": float(ate_lower) if ate_lower else None,
+                    "ate_upper": float(ate_upper) if ate_upper else None,
+                    "cum_lower": float(cum_lower) if cum_lower else None,
+                    "cum_upper": float(cum_upper) if cum_upper else None,
+                    "rel_lower": float(rel_lower) if rel_lower else None,
+                    "rel_upper": float(rel_upper) if rel_upper else None,
+                    "has_ci": bool(has_ci)
+                },
+                "plot_path": impact_plot_file,
+                "att_plot_path": att_plot_file
             }
             
         except Exception as e:

@@ -5,6 +5,7 @@ from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from econml.dml import LinearDML, CausalForestDML
 import matplotlib.pyplot as plt
+import plotly.express as px
 from dowhy import CausalModel
 from scipy import stats
 import statsmodels.api as sm
@@ -152,9 +153,7 @@ def simulate_bsts_demo_data():
         # Base Metric (e.g. Daily Revenue)
         metric = regional_trend + weekly_seasonality + monthly_seasonality + noise
         
-        # Intervention Effect (Only for Region_1, starting at day 304, which is 2023-11-01)
         intervention_day = 304
-        
         if region == 'Region_1':
             # Add a cumulative lift starting from intervention_day
             lift = np.zeros(total_days)
@@ -896,11 +895,14 @@ with tab_eda:
             return
 
         if chart_type == "Scatter Plot":
-            st.scatter_chart(data, x=x, y=y, color=color)
+            fig = px.scatter(data, x=x, y=y, color=color, title=f"Scatter Plot {title_suffix}")
+            st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Line Chart":
-            st.line_chart(data, x=x, y=y, color=color)
+            fig = px.line(data, x=x, y=y, color=color, title=f"Line Chart {title_suffix}")
+            st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Bar Chart":
-            st.bar_chart(data, x=x, y=y, color=color)
+            fig = px.bar(data, x=x, y=y, color=color, title=f"Bar Chart {title_suffix}")
+            st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Histogram":
             fig, ax = plt.subplots()
             if color:
@@ -2642,9 +2644,9 @@ with tab_quasi:
                         except Exception as e:
                             st.warning(f"Could not load ATT plot: {e}")
                     
-                    if 'plot_df' in results and results['plot_df'] is not None:
+                    if 'plot_df' in results['result'] and results['result']['plot_df'] is not None:
                         with st.expander("View Underlying Plot Data", expanded=False):
-                            st.dataframe(results['plot_df'], use_container_width=True)
+                            st.dataframe(results['result']['plot_df'], use_container_width=True)
 
         # --- EXPORT SECTION ---
         st.divider()

@@ -7,8 +7,8 @@ scikit-learn
 matplotlib
 google-genai
 statsmodels
+plotly
 rpy2
-
 # --- Metadata ---
 # Release: 4.4.0 | 2026-03-26 | Modernized UI with custom theme configuration, and new HTML-based user guide.
 # Release: 4.3.0 | 2026-03-22 | Added missing advanced parameters for GeoLift analysis, and embedded paper reference links.

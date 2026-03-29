@@ -68,6 +68,15 @@ Navigate through the tabs:
 - `google-genai`: AI Assistant integration
 - `pandas`, `numpy`, `matplotlib`, `seaborn`: Data processing and visualization
 
+## 📝 Version History
+
+- **v1.2.0 (Latest)**: 
+  - Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates (`App_Downloads`, `Website_Traffic`, `Social_Media_Mentions`).
+  - Standardized metric parsing and fully documented rigorous 95% Confidence Intervals for GeoLift and CausalImpact.
+  - Resolved legend overflow rendering issues by migrating core metric plots to Plotly Express.
+- **v1.1.0**: Integrated complete end-to-end R to Python GeoLift support featuring robust Power Analysis & Market Selection.
+- **v1.0.0**: Initial Release with OLS, PSM, DiD, and baseline CausalImpact.
+
 ## 📄 License
 
 [Insert License Info Here]
