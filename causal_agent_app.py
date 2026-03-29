@@ -698,7 +698,7 @@ with tab_eda:
                      df_summary[col] = df_summary[col].astype(str)
 
         st.markdown("**Numeric Statistics**")
-        st.dataframe(df_summary.describe().astype(str))
+        st.dataframe(df_summary.describe().round(2).astype(str))
         
         st.markdown("**Categorical Statistics**")
         cat_cols = df_summary.select_dtypes(include=['object', 'category']).columns
