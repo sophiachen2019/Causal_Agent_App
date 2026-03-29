@@ -70,12 +70,12 @@ Navigate through the tabs:
 
 ## 📝 Version History
 
-- **v1.2.0 (Latest)**: 
-  - Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates (`App_Downloads`, `Website_Traffic`, `Social_Media_Mentions`).
-  - Standardized metric parsing and fully documented rigorous 95% Confidence Intervals for GeoLift and CausalImpact.
-  - Resolved legend overflow rendering issues by migrating core metric plots to Plotly Express.
-- **v1.1.0**: Integrated complete end-to-end R to Python GeoLift support featuring robust Power Analysis & Market Selection.
-- **v1.0.0**: Initial Release with OLS, PSM, DiD, and baseline CausalImpact.
+- **v4.5.0 (Latest)**: Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, documented rigorous 95% Confidence Intervals for all metrics, and migrated core plots to Plotly Express.
+- **v4.4.0**: Modernized UI with custom theme configuration and new HTML-based user guide.
+- **v4.3.0**: Added missing advanced parameters for GeoLift analysis and embedded paper reference links.
+- **v4.2.0**: Standardized inference scorecards for GeoLift and CausalImpact, added underlying time series UI data tables, and enhanced Python script exporter template.
+- **v4.1.0**: Added covariate support for GeoLift models and migrated CausalImpact to the official R implementation.
+- **v4.0.0**: Added GeoLift (Synthetic Control) for Market Selection and Impact Estimation.
 
 ## 📄 License
 
