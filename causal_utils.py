@@ -1724,3 +1724,145 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
             
         except Exception as e:
             return {"error": f"GeoLift Market Selection failed: {e}"}
+
+
+# ========================================================
+# CausalPy: Bayesian Synthetic Control (Pure Python)
+# ========================================================
+def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
+                                    intervention_date, treatment_duration=60,
+                                    hdi_prob=0.95, direction="two-sided",
+                                    covariates=None):
+    """
+    Runs Bayesian Synthetic Control using CausalPy (PyMC backend).
+    Returns a structured dict with metrics, plots, and summary text.
+    """
+    import causalpy
+    from causalpy.pymc_models import WeightedSumFitter
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import tempfile
+    import os
+
+    try:
+        # --- 1. Data Preparation ---
+        df_work = df[[date_col, geo_col, kpi_col]].copy()
+        df_work[date_col] = pd.to_datetime(df_work[date_col])
+        df_work[kpi_col] = pd.to_numeric(df_work[kpi_col], errors='coerce')
+        df_work = df_work.dropna()
+
+        # Pivot to wide format: rows=dates, columns=regions
+        df_wide = df_work.pivot_table(index=date_col, columns=geo_col, values=kpi_col, aggfunc='mean')
+        df_wide = df_wide.sort_index().reset_index(drop=False)
+        df_wide = df_wide.set_index(date_col)
+
+        # Validate treated geo exists
+        treated_geo_str = str(treated_geo)
+        if treated_geo_str not in df_wide.columns:
+            return {"error": f"Treated geography '{treated_geo_str}' not found in pivoted columns: {list(df_wide.columns)}"}
+
+        # Identify control columns
+        control_cols = [c for c in df_wide.columns if c != treated_geo_str]
+        if len(control_cols) == 0:
+            return {"error": "No control regions found. Need at least one untreated region."}
+
+        # Drop any control columns with all NaN
+        df_wide = df_wide.dropna(axis=1, how='all')
+        control_cols = [c for c in df_wide.columns if c != treated_geo_str]
+
+        # Forward-fill remaining NaN
+        df_wide = df_wide.ffill().bfill()
+
+        # Determine treatment time
+        intervention_dt = pd.to_datetime(intervention_date)
+
+        # --- 2. Fit Model ---
+        result = causalpy.SyntheticControl(
+            df_wide,
+            treatment_time=intervention_dt,
+            treated_units=[treated_geo_str],
+            control_units=control_cols,
+            model=WeightedSumFitter(sample_kwargs={
+                "target_accept": 0.95,
+                "random_seed": 42,
+                "progressbar": False
+            }),
+        )
+
+        # --- 3. Extract Effect Summary ---
+        stats = result.effect_summary(
+            treated_unit=treated_geo_str,
+            direction=direction,
+        )
+
+        # Parse the stats table
+        stats_table = stats.table
+        stats_text = stats.text
+
+        # Extract key metrics from the table
+        # Table structure: index=["average","cumulative"], columns=["mean","median","hdi_lower","hdi_upper","p_two_sided","prob_of_effect","relative_mean","relative_hdi_lower","relative_hdi_upper"]
+        avg_effect = None
+        avg_ci_lower = None
+        avg_ci_upper = None
+        cum_effect = None
+        cum_ci_lower = None
+        cum_ci_upper = None
+        prob_effect = None
+        rel_effect = None
+        rel_ci_lower = None
+        rel_ci_upper = None
+
+        try:
+            if "average" in stats_table.index:
+                avg_row = stats_table.loc["average"]
+                avg_effect = float(avg_row.get("mean", 0))
+                avg_ci_lower = float(avg_row.get("hdi_lower", 0))
+                avg_ci_upper = float(avg_row.get("hdi_upper", 0))
+                prob_effect = float(avg_row.get("prob_of_effect", 0))
+                rel_effect = float(avg_row.get("relative_mean", 0)) / 100.0  # Convert from percentage
+                rel_ci_lower = float(avg_row.get("relative_hdi_lower", 0)) / 100.0
+                rel_ci_upper = float(avg_row.get("relative_hdi_upper", 0)) / 100.0
+            if "cumulative" in stats_table.index:
+                cum_row = stats_table.loc["cumulative"]
+                cum_effect = float(cum_row.get("mean", 0))
+                cum_ci_lower = float(cum_row.get("hdi_lower", 0))
+                cum_ci_upper = float(cum_row.get("hdi_upper", 0))
+        except Exception:
+            pass  # Will fall back to text-based summary
+
+        # --- 4. Generate Plots ---
+        plot_path = None
+        try:
+            fig, axes = result.plot()
+            tmp_plot = tempfile.NamedTemporaryFile(suffix='.png', delete=False, dir='/tmp')
+            fig.savefig(tmp_plot.name, dpi=150, bbox_inches='tight')
+            plt.close(fig)
+            plot_path = tmp_plot.name
+        except Exception:
+            pass
+
+        # --- 5. Return Structured Results ---
+        return {
+            "metrics": {
+                "avg_effect": avg_effect,
+                "avg_ci_lower": avg_ci_lower,
+                "avg_ci_upper": avg_ci_upper,
+                "cum_effect": cum_effect,
+                "cum_ci_lower": cum_ci_lower,
+                "cum_ci_upper": cum_ci_upper,
+                "prob_effect": prob_effect,
+                "rel_effect": rel_effect,
+                "rel_ci_lower": rel_ci_lower,
+                "rel_ci_upper": rel_ci_upper,
+                "hdi_prob": hdi_prob,
+                "direction": direction,
+                "treated_geo": treated_geo_str,
+            },
+            "summary_text": stats_text,
+            "summary_table": stats_table,
+            "plot_path": plot_path,
+        }
+
+    except Exception as e:
+        return {"error": f"CausalPy Synthetic Control failed: {e}"}

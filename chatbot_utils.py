@@ -60,9 +60,10 @@ def get_app_context():
        - Validations: Refutation tests (Random Common Cause, Placebo Treatment).
        - Features: ATE estimation, HTE (Heterogeneity) analysis.
     2. Quasi-Experimental Analysis (Tab 4):
-       - Methods: Difference-in-Differences (DiD), Interrupted/Bayesian Time Series (ITS/BSTS), and GeoLift (Synthetic Control).
-       - When to use: When the intervention is not randomly assigned at the user level, but rather implemented over time or separated across specific geographic regions (GeoLift).
-       - Impact Estimation: ITS/BSTS and GeoLift return 4-column metric scorecards including ATE, Cumulative Lift, and Relative Lift. They prominently display 95% Confidence Intervals mapped conditionally off `metrics['has_ci']`. All simulation models default to 60-day prediction windows beginning Nov 1st.
+       - Methods: Difference-in-Differences (DiD), Interrupted/Bayesian Time Series (ITS/BSTS), GeoLift (Synthetic Control), and CausalPy (Bayesian Synthetic Control).
+       - When to use: When the intervention is not randomly assigned at the user level, but rather implemented over time or separated across specific geographic regions (GeoLift/CausalPy).
+       - Impact Estimation: ITS/BSTS, GeoLift, and CausalPy return metric scorecards including ATE, Cumulative Lift, and Relative Lift with Confidence/Credible Intervals.
+       - CausalPy: Pure-Python Bayesian Synthetic Control using PyMC. Provides proper two-sided HDI credible intervals, posterior probability of effect, and relative lift. Recommended over GeoLift for robust uncertainty quantification without R dependencies.
        - Support: Panel Data (Synthetic Control style) or Aggregate Time Series.
     3. Reproducibility:
        - Every analysis in Tab 3 and Tab 4 has a "Data & Script Export" section to download CSV results and a Python reproduction script.
@@ -173,6 +174,60 @@ def run_synthetic_control_geolift(date_col: str, geo_col: str, treated_geo: str,
     except Exception as e:
         return f"Error running GeoLift: {e}"
 
+def run_causalpy_analysis(date_col: str, geo_col: str, treated_geo: str, kpi_col: str, intervention_date: str, treatment_duration: int = 60, direction: str = "two-sided") -> str:
+    """
+    Runs CausalPy Bayesian Synthetic Control on Panel Data. Pure Python alternative to GeoLift with proper two-sided HDI intervals and posterior probabilities.
+    intervention_date must be YYYY-MM-DD. direction can be "two-sided", "increase", or "decrease".
+    """
+    if 'df' not in st.session_state or st.session_state.df is None:
+        return "Error: No dataset loaded."
+    df = st.session_state.df
+    
+    try:
+        res = causal_utils.run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo, intervention_date, treatment_duration=treatment_duration, direction=direction)
+        if 'error' in res:
+            return f"Error in CausalPy: {res['error']}"
+        
+        metrics = res.get('metrics', {})
+        output = "CausalPy (Bayesian Synthetic Control) Results:\\n"
+        if metrics.get('avg_effect') is not None:
+            output += f"Average Treatment Effect (ATT): {metrics['avg_effect']:.4f}\\n"
+            output += f"95% HDI: [{metrics.get('avg_ci_lower', 0):.4f}, {metrics.get('avg_ci_upper', 0):.4f}]\\n"
+        if metrics.get('cum_effect') is not None:
+            output += f"Cumulative Impact: {metrics['cum_effect']:.4f}\\n"
+        if metrics.get('rel_effect') is not None:
+            output += f"Relative Lift: {metrics['rel_effect']:.2%}\\n"
+        if metrics.get('prob_effect') is not None:
+            output += f"Posterior Probability of Effect: {metrics['prob_effect']:.4f}\\n"
+        if res.get('summary_text'):
+            output += f"\\nFull Summary:\\n{res['summary_text'][:500]}"
+        return output
+    except Exception as e:
+        return f"Error running CausalPy: {e}"
+
+
+def load_synthetic_dataset(theme: str, business_function: str) -> str:
+    """
+    Generates a new synthetic dataset based on a given business theme (e.g. eCommerce) 
+    and business function (e.g. Marketing) and loads it into the application's global state. 
+    Use this tool when the user asks to generate a new dataset.
+    """
+    import data_generation_utils
+    try:
+        api_key = get_api_key()
+        df, description, questions = data_generation_utils.generate_dynamic_dataset(theme, business_function, api_key)
+        st.session_state.df = df
+        st.session_state.raw_df = df.copy()
+        st.session_state.bucketing_ops = []
+        st.session_state.filtering_ops = []
+        st.session_state.sim_type = "Dynamic"
+        st.session_state.dataset_description = description
+        st.session_state.dataset_questions = questions
+        st.session_state.data_quality_summary = None
+        questions_text = " ".join([f"({i+1}) {q}" for i, q in enumerate(questions)]) if questions else ""
+        return f"Successfully generated a dataset with {len(df)} rows and {len(df.columns)} columns based on the '{theme}' theme and '{business_function}' function. {description} Suggested questions: {questions_text}"
+    except Exception as e:
+        return f"Failed to generate dataset: {str(e)}"
 
 def chat_stream(model_name, messages, data_context, app_context, api_key):
     """
@@ -224,7 +279,7 @@ def chat_stream(model_name, messages, data_context, app_context, api_key):
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         temperature=0.7,
-        tools=[run_observational_analysis, run_did_analysis, run_time_series_bsts, run_synthetic_control_geolift]
+        tools=[run_observational_analysis, run_did_analysis, run_time_series_bsts, run_synthetic_control_geolift, run_causalpy_analysis, load_synthetic_dataset]
     )
 
     # Convert messages

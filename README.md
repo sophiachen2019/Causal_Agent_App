@@ -7,7 +7,7 @@ Try it out here: https://causalinferenceagent.streamlit.app/
 ## 🚀 Key Features
 
 - **Observational Analysis**: Implements robust causal estimation methods including OLS/Logit, Propensity Score Matching (PSM), Inverse Propensity Weighting (IPTW), Double Machine Learning (DML), and Meta-Learners (S/T-Learner).
-- **Quasi-Experimental Analysis**: Dedicated modules for **Difference-in-Differences (DiD)**, **Interrupted/Bayesian Time Series (ITS/BSTS)**, and **GeoLift (Synthetic Control)** for panel and geographic split-testing data.
+- **Quasi-Experimental Analysis**: Dedicated modules for **Difference-in-Differences (DiD)**, **Interrupted/Bayesian Time Series (ITS/BSTS)**, **GeoLift (Synthetic Control)**, and **CausalPy (Bayesian Synthetic Control)** for panel and geographic split-testing data.
 - **Unified Impact Estimation**: GeoLift and ITS/BSTS share a fully standardized metric scorecard UI natively compiling robust 95% Confidence Intervals for Absolute, Cumulative, and Relative Lifts. 
 - **AI Assistant**: An integrated chatbot powered by Gemini (Google GenAI) to provide guidance on methodology, interpret results, and suggest best practices.
 - **Reproducible Research**: One-click generation of Python scripts to reproduce any analysis performed in the UI.
@@ -70,7 +70,8 @@ Navigate through the tabs:
 
 ## 📝 Version History
 
-- **v4.5.0 (Latest)**: Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, documented rigorous 95% Confidence Intervals for all metrics, and migrated core plots to Plotly Express.
+- **v5.0.0 (Latest)**: Added CausalPy (Bayesian Synthetic Control) as a pure-Python alternative to GeoLift with proper two-sided HDI intervals; data quality simulation (Low/Medium/High); advanced preprocessing (Conditional Override, Resampling); backend API rate limiting; dataset download; updated User Guide and AI knowledge base.
+- **v4.5.0**: Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, documented rigorous 95% Confidence Intervals for all metrics, and migrated core plots to Plotly Express.
 - **v4.4.0**: Modernized UI with custom theme configuration and new HTML-based user guide.
 - **v4.3.0**: Added missing advanced parameters for GeoLift analysis and embedded paper reference links.
 - **v4.2.0**: Standardized inference scorecards for GeoLift and CausalImpact, added underlying time series UI data tables, and enhanced Python script exporter template.
