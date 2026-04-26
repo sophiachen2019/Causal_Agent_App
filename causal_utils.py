@@ -15,6 +15,20 @@ import statsmodels.api as sm
 if not hasattr(pd.DataFrame, 'applymap'):
     pd.DataFrame.applymap = pd.DataFrame.map
 
+# --- ArviZ compatibility shim (must run BEFORE CausalPy is imported) ---
+# CausalPy 0.8.0 uses az.InferenceData in type annotations throughout pymc_models.py.
+# Newer arviz versions (transition to 1.0) may remove InferenceData from top-level.
+try:
+    import arviz as _az
+    if not hasattr(_az, 'InferenceData'):
+        try:
+            from arviz.data import InferenceData as _ID
+            _az.InferenceData = _ID
+        except ImportError:
+            pass
+except ImportError:
+    pass
+
 def generate_script(data_source, treatment, outcome, confounders, time_period, estimation_method, 
                     impute_enable, num_impute_method, num_custom_val, cat_impute_method, cat_custom_val,
                     winsorize_enable, winsorize_cols, percentile,
@@ -1744,16 +1758,6 @@ def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
     import matplotlib.pyplot as plt
     import tempfile
     import os
-    import arviz as az
-
-    # --- ArviZ compatibility shim ---
-    # Some arviz versions (transition to 1.0) remove InferenceData from top-level
-    if not hasattr(az, 'InferenceData'):
-        try:
-            from arviz.data import InferenceData
-            az.InferenceData = InferenceData
-        except ImportError:
-            pass
 
     try:
         # --- 1. Data Preparation ---
