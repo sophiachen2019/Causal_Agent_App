@@ -9,6 +9,23 @@ import plotly.express as px
 from dowhy import CausalModel
 from scipy import stats
 import statsmodels.api as sm
+from PIL import Image
+
+def st_plotly_image(image_path, caption=""):
+    try:
+        img = Image.open(image_path)
+        fig = px.imshow(img)
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=30 if caption else 0, b=0),
+            coloraxis_showscale=False,
+            title=caption,
+            title_x=0.5
+        )
+        fig.update_xaxes(showticklabels=False, showgrid=False, zeroline=False)
+        fig.update_yaxes(showticklabels=False, showgrid=False, zeroline=False)
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.image(image_path, caption=caption, use_container_width=True) # Fallback
 
 def get_index(columns, default_name, default_idx):
     if default_name in columns:
@@ -1913,7 +1930,7 @@ with tab_config:
                 # Plotting
                 st.subheader("Visualization")
                 try:
-                    st.image(results['plot_path'], caption="CausalImpact Results: Original, Pointwise, and Cumulative", use_container_width=True)
+                    st_plotly_image(results['plot_path'], "CausalImpact Results: Original, Pointwise, and Cumulative")
                     if 'plot_df' in results and results['plot_df'] is not None:
                         with st.expander("View Underlying Plot Data", expanded=False):
                             st.dataframe(results['plot_df'], use_container_width=True)
@@ -1966,10 +1983,10 @@ with tab_config:
                         col_plot1, col_plot2 = st.columns(2)
                         with col_plot1:
                             if 'power_plot' in results['result']:
-                                st.image(results['result']['power_plot'], caption="Power Curve: Effect Size vs Power", use_container_width=True)
+                                st_plotly_image(results['result']['power_plot'], "Power Curve: Effect Size vs Power")
                         with col_plot2:
                             if 'series_plot' in results['result']:
-                                st.image(results['result']['series_plot'], caption="Historical Fit: Treated vs Synthetic", use_container_width=True)
+                                st_plotly_image(results['result']['series_plot'], "Historical Fit: Treated vs Synthetic")
                                 
                         st.markdown(r"""
                         #### 💡 How to Interpret & Select Markets
@@ -2045,12 +2062,12 @@ with tab_config:
                     if 'plot_path' in results['result'] or 'att_plot_path' in results['result']:
                         if 'plot_path' in results['result']:
                             try:
-                                st.image(results['result']['plot_path'], caption="GeoLift Results: Treated vs Synthetic Control", use_container_width=True)
+                                st_plotly_image(results['result']['plot_path'], "GeoLift Results: Treated vs Synthetic Control")
                             except Exception as e:
                                 st.warning(f"Could not load standard plot: {e}")
                         if 'att_plot_path' in results['result']:
                             try:
-                                st.image(results['result']['att_plot_path'], caption="Average Treatment Effect on the Treated (ATT)", use_container_width=True)
+                                st_plotly_image(results['result']['att_plot_path'], "Average Treatment Effect on the Treated (ATT)")
                             except Exception as e:
                                 st.warning(f"Could not load ATT plot: {e}")
                         
@@ -2137,7 +2154,7 @@ with tab_config:
                     # Plot
                     if 'plot_path' in results['result'] and results['result']['plot_path']:
                         try:
-                            st.image(results['result']['plot_path'], caption="CausalPy: Treated vs Synthetic Control with Credible Intervals", use_container_width=True)
+                            st_plotly_image(results['result']['plot_path'], "CausalPy: Treated vs Synthetic Control with Credible Intervals")
                         except Exception as e:
                             st.warning(f"Could not load plot: {e}")
 
