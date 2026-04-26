@@ -1307,8 +1307,20 @@ with tab_config:
                 if not check_api_limit():
                     st.stop()
                 with st.spinner("AI is generating guidance..."):
-                    _method_name = estimation_method if _is_observational else st.session_state.get('_quasi_method', 'DiD')
-                    guidance = data_generation_utils.generate_config_guidance(df, chatbot_utils.get_api_key(), method=_method_name)
+                    if _is_observational:
+                        _method_name = estimation_method if 'estimation_method' in dir() else "Linear/Logistic Regression (OLS/Logit)"
+                    else:
+                        _method_name = st.session_state.get('_quasi_method', None)
+                        if not _method_name:
+                            # Infer from data structure
+                            has_geo = any(k in c.lower() for c in df.columns for k in ['region', 'geo', 'city', 'state', 'market', 'location'])
+                            if has_geo:
+                                _method_name = "CausalPy (Bayesian Synthetic Control)"
+                            else:
+                                _method_name = "CausalImpact (Bayesian Time Series)"
+                    # Pass any existing method recommendation for consistency
+                    _existing_rec = st.session_state.get('config_method_rec', '')
+                    guidance = data_generation_utils.generate_config_guidance(df, chatbot_utils.get_api_key(), method=_method_name, method_recommendation=_existing_rec)
                     st.session_state.config_guide = guidance
         if st.session_state.get('config_method_rec'):
             st.info(st.session_state.config_method_rec)

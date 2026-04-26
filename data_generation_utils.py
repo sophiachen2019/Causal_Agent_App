@@ -544,7 +544,7 @@ def generate_method_recommendation(df: pd.DataFrame, api_key: str, tab_type: str
         return f"Could not generate recommendation: {str(e)}"
 
 
-def generate_config_guidance(df: pd.DataFrame, api_key: str, method: str, treatment: str = None, outcome: str = None) -> str:
+def generate_config_guidance(df: pd.DataFrame, api_key: str, method: str, treatment: str = None, outcome: str = None, method_recommendation: str = None) -> str:
     """
     Provides specific configuration guidance for the selected causal method.
     """
@@ -559,6 +559,17 @@ def generate_config_guidance(df: pd.DataFrame, api_key: str, method: str, treatm
     context = f"Treatment: {treatment}" if treatment else ""
     context += f", Outcome: {outcome}" if outcome else ""
     
+    rec_context = ""
+    if method_recommendation:
+        rec_context = f"""
+    IMPORTANT: A prior method recommendation was generated for this dataset:
+    ---
+    {method_recommendation[:500]}
+    ---
+    Your configuration guide MUST be consistent with this recommendation. Focus your guidance on the method: {method}.
+    Do NOT suggest a different method or talk about other methods unless the user has explicitly selected one.
+    """
+    
     prompt = f"""
     You are a causal inference expert helping a user configure their analysis.
     
@@ -566,6 +577,7 @@ def generate_config_guidance(df: pd.DataFrame, api_key: str, method: str, treatm
     Dataset columns: {cols_str}
     {context}
     Dataset size: {len(df)} rows
+    {rec_context}
     
     Provide a brief configuration guide (4-5 bullet points) covering:
     1. **Variable Selection**: Which columns should be treatment, outcome, and confounders (if applicable)? Be specific.
