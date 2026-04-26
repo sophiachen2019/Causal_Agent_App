@@ -652,16 +652,14 @@ with tab_eda:
             st.markdown("### 🚦 Mathematical Readiness Assessment")
             try:
                 readiness = causal_utils.assess_data_readiness(df)
-                if readiness['status'] == 'red':
-                    st.error("**🔴 Not Ready: Blocking Errors Detected**\n\nThe following issues ensure PyMC or structural solvers will fail. Fix these before running Quasi-Experimental analysis.")
-                    for b in readiness['blocking']:
-                        st.write(f"- {b}")
-                elif readiness['status'] == 'yellow':
-                    st.warning("**🟡 Ready with Warnings**\n\nThe dataset is structurally sound but contains potential statistical anomalies that may introduce noise.")
-                    for w in readiness['warnings']:
-                        st.write(f"- {w}")
-                else:
-                    st.success("**🟢 Fully Ready**\n\nThe dataset structure is complete and mathematically sound. No blocking errors or severe outliers detected.")
+                for method, checks in readiness.items():
+                    if checks['status'] == 'red':
+                        st.error(f"**🔴 {method} Not Ready**\n\n" + "\n".join([f"- {m}" for m in checks['messages']]))
+                    elif checks['status'] == 'yellow':
+                        msg_str = "\n".join([f"- {m}" for m in checks['messages']])
+                        st.warning(f"**🟡 {method} Ready with Warnings**\n\n" + msg_str if checks['messages'] else f"**🟡 {method} Ready with Warnings**")
+                    else:
+                        st.success(f"**🟢 {method} Fully Ready**")
             except Exception as e:
                 st.warning(f"Could not calculate readiness: {e}")
                 

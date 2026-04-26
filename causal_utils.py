@@ -31,49 +31,106 @@ except ImportError:
 
 def assess_data_readiness(df):
     """
-    Evaluates dataset mathematically for Causal Inference PyMC blocking issues vs statistical warnings.
+    Evaluates dataset structurally against 7 different causal inference archetypes.
     Returns:
-       dict: { 'status': 'red', 'yellow', or 'green',
-               'blocking': [...strings...],
-               'warnings': [...strings...] }
+       dict: { category_name: { 'status': 'red'|'yellow'|'green', 'messages': [...] }, ... }
     """
-    blocking = []
-    warnings = []
+    results = {}
     
-    # 1. Total Rows
-    if len(df) < 15:
-        blocking.append(f"Only {len(df)} rows found. Less than 15 rows is mathematically insufficient to split pre/post periods for Synth/ITS.")
-        
-    # 2. Extreme Missing Data
-    total_cells = df.size
-    total_missing = df.isnull().sum().sum()
-    if total_missing / total_cells > 0.5:
-        blocking.append(f"More than 50% of the dataset is missing ({total_missing} null values).")
-    elif total_missing > 0:
-        warnings.append(f"There are {total_missing} missing (NaN/null) values. Ensure imputation is checked before modeling.")
-        
-    # 3. Numeric Checking (Zero Variance / Outliers)
+    # Heuristics
     num_cols = df.select_dtypes(include=['number']).columns
+    cat_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns
+    date_cols = [c for c in df.columns if pd.api.types.is_datetime64_any_dtype(df[c]) or 'date' in c.lower()]
+    total_missing = df.isnull().sum().sum()
+    total_cells = df.size
+    rows = len(df)
+    cols = len(df.columns)
+    
+    # 1. Universal Base
+    uni_status = "green"
+    uni_msgs = []
+    if rows < 15:
+        uni_status = "red"
+        uni_msgs.append(f"Only {rows} rows found. Less than 15 rows is mathematically insufficient.")
+    if total_missing / total_cells > 0.5:
+        uni_status = "red"
+        uni_msgs.append(f"More than 50% of the dataset is missing ({total_missing} null values).")
+    elif total_missing > 0:
+        uni_status = "yellow"
+        uni_msgs.append(f"There are {total_missing} missing (NaN/null) values. Imputation is required.")
+        
     for col in num_cols:
         col_std = df[col].std()
         if pd.isna(col_std) or col_std == 0:
-            blocking.append(f"Column '{col}' has zero variance (constant value). This will crash linear estimators and PyMC.")
-        else:
-            outliers = (df[col] - df[col].mean()).abs() > 4 * col_std
-            if outliers.sum() > 0:
-                warnings.append(f"Column '{col}' has {outliers.sum()} extreme outliers (>4 StdDevs). PyMC may diverge or coefficients may skew.")
-                
-    status = "green"
-    if len(warnings) > 0:
-        status = "yellow"
-    if len(blocking) > 0:
-        status = "red"
-        
-    return {
-        "status": status,
-        "blocking": list(set(blocking)),
-        "warnings": list(set(warnings))
-    }
+            uni_status = "red"
+            uni_msgs.append(f"Column '{col}' has zero variance (constant value). This crashes regressions.")
+    results['Universal (Base)'] = {'status': uni_status, 'messages': list(set(uni_msgs))}
+    
+    # 2. Difference-in-Differences (DiD)
+    did_status = "green"
+    did_msgs = []
+    has_binary_time = any(df[c].nunique() == 2 for c in df.columns)
+    has_groups = any(df[c].nunique() >= 2 for c in df.columns)
+    if not has_binary_time or not has_groups:
+        did_status = "yellow"
+        did_msgs.append("DiD requires a categorical group variable and a binary Pre/Post time indicator.")
+    results['Difference-in-Differences'] = {'status': did_status, 'messages': did_msgs}
+
+    # 3. Time Series (BSTS / CausalImpact)
+    ts_status = "green"
+    ts_msgs = []
+    if len(date_cols) == 0:
+        ts_status = "red"
+        ts_msgs.append("Time Series models violently fail without a recognized Datetime / Date column.")
+    elif total_missing > 0:
+        ts_status = "yellow"
+        ts_msgs.append("BSTS solvers crash if there are structural NaN gaps in the continuous time series.")
+    results['Bayesian Time Series (CausalImpact)'] = {'status': ts_status, 'messages': ts_msgs}
+
+    # 4. Synthetic Control (GeoLift / CausalPy)
+    sc_status = "green"
+    sc_msgs = []
+    if len(date_cols) == 0:
+        sc_status = "red"
+        sc_msgs.append("Synthetic Control requires a Datetime / Date column.")
+    if len(cat_cols) == 0 and not any(df[c].nunique() < rows/2 for c in df.columns):
+        sc_status = "red"
+        sc_msgs.append("Synthetic Control requires a Location/Geography column to identify distinct panel entities.")
+    elif len(cat_cols) > 0 and max(df[c].nunique() for c in cat_cols) < 2:
+        sc_status = "red"
+        sc_msgs.append("You must have at least 2 distinct Locations (1 Treated, 1 Donor pool) to run Synthetic Controls.")
+    results['Synthetic Control (GeoLift/CausalPy)'] = {'status': sc_status, 'messages': sc_msgs}
+    
+    # 5. Cross-Sectional ML (DML, Meta-learners)
+    ml_status = "green"
+    ml_msgs = []
+    if rows < 150:
+        ml_status = "yellow"
+        ml_msgs.append(f"Random Forest/DML with only {rows} rows runs a severe risk of high overfitting.")
+    results['Cross-Sectional ML (DML/Meta)'] = {'status': ml_status, 'messages': ml_msgs}
+
+    # 6. Traditional Stats (OLS, Logistic)
+    stat_status = "green"
+    stat_msgs = []
+    if rows <= cols:
+        stat_status = "red"
+        stat_msgs.append("Degrees of Freedom violation: You have more columns than rows, meaning OLS matrices are singular.")
+    has_binary_target = any(df[c].nunique() == 2 for c in num_cols)
+    if not has_binary_target:
+        if stat_status != "red": stat_status = "yellow"
+        stat_msgs.append("Logistic Regression explicitly requires a binary Target (Outcome) variable to classify.")
+    results['Traditional Stats (OLS/Logistic)'] = {'status': stat_status, 'messages': stat_msgs}
+
+    # 7. Propensity Score (PSM / IPTW)
+    psm_status = "green"
+    psm_msgs = []
+    has_binary_treat = any(df[c].nunique() == 2 for c in df.columns)
+    if not has_binary_treat:
+        psm_status = "red"
+        psm_msgs.append("Models calculating Propensity absolutely require a binary (0/1) Treatment indicator.")
+    results['Propensity Scores (PSM/IPTW)'] = {'status': psm_status, 'messages': psm_msgs}
+
+    return results
 
 def generate_script(data_source, treatment, outcome, confounders, time_period, estimation_method, 
                     impute_enable, num_impute_method, num_custom_val, cat_impute_method, cat_custom_val,
