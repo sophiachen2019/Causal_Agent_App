@@ -1865,6 +1865,81 @@ def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
         except Exception:
             pass  # Will fall back to text-based summary
 
+        # -------------------------------------------------------------
+        # OVERRIDE WITH POSTERIOR_PREDICTIVE (User requested metric fix)
+        # CausalPy's default effect_summary uses `posterior` (structural mean).
+        # To incorporate observation noise into our HDIs, we use `posterior_predictive`.
+        # -------------------------------------------------------------
+        try:
+            # 1. Get true post-intervention Actuals
+            post_mask = df_wide.index >= intervention_dt
+            y_actual = df_wide.loc[post_mask, treated_geo_str].values # (n_post_time,)
+            
+            # 2. Extract Posterior Predictive samples for post-intervention
+            # post_pred contains only the post-treatment prediction samples
+            y_hat_samples = result.post_pred.posterior_predictive['y_hat'].values 
+            # y_hat_samples shape: (chain, draw, obs_ind) usually e.g., (4, 1000, 12)
+            # Ensure it aligns with y_actual length
+            
+            if y_hat_samples.shape[-1] == len(y_actual):
+                # Calculate Absolute Effects: Actual - Expected
+                # Using broadcasting: shape becomes (chain, draw, obs_ind)
+                eff_samples = y_actual - y_hat_samples
+                
+                # Flatten chains/draws into a single sample distribution array
+                eff_samples_flat = eff_samples.reshape(-1, len(y_actual)) # shape: (SAMPLES, TIME)
+                
+                # Calculate Average and Cumulative metrics across time, 
+                # leaving us with a full posterior_predictive distribution of the effects!
+                avg_eff_dist = eff_samples_flat.mean(axis=1) # shape: (SAMPLES,)
+                cum_eff_dist = eff_samples_flat.sum(axis=1)  # shape: (SAMPLES,)
+                
+                # Compute rigorous HDIs natively taking observation noise into account
+                avg_hdi = az.hdi(avg_eff_dist, hdi_prob=hdi_prob)
+                cum_hdi = az.hdi(cum_eff_dist, hdi_prob=hdi_prob)
+                
+                # Compute rigorous two-sided Bayesian p-values
+                avg_p_val = 2 * min((avg_eff_dist > 0).mean(), (avg_eff_dist < 0).mean())
+                cum_p_val = 2 * min((cum_eff_dist > 0).mean(), (cum_eff_dist < 0).mean())
+                prob_effect_overwritten = (avg_eff_dist > 0).mean() if avg_eff_dist.mean() > 0 else (avg_eff_dist < 0).mean()
+                
+                # Compute Relative Lifts
+                # Relative Lift = (Actual / Expected) - 1
+                rel_mean_dist = (y_actual.mean() / (y_hat_samples.mean(axis=-1).flatten())) - 1.0
+                rel_hdi = az.hdi(rel_mean_dist, hdi_prob=hdi_prob)
+                
+                # --- Overwrite default stats ---
+                # Absolute Average
+                avg_effect = float(avg_eff_dist.mean())
+                avg_ci_lower, avg_ci_upper = float(avg_hdi[0]), float(avg_hdi[1])
+                # Absolute Cumulative
+                cum_effect = float(cum_eff_dist.mean())
+                cum_ci_lower, cum_ci_upper = float(cum_hdi[0]), float(cum_hdi[1])
+                # Relative Average
+                rel_effect = float(rel_mean_dist.mean())
+                rel_ci_lower, rel_ci_upper = float(rel_hdi[0]), float(rel_hdi[1])
+                # Significance 
+                prob_effect = float(prob_effect_overwritten)
+                
+                # Patch into the table so the UI renders it cleanly
+                if "average" in stats_table.index:
+                    stats_table.loc["average", "mean"] = avg_effect
+                    stats_table.loc["average", "hdi_lower"] = avg_ci_lower
+                    stats_table.loc["average", "hdi_upper"] = avg_ci_upper
+                    stats_table.loc["average", "p_two_sided"] = avg_p_val
+                    stats_table.loc["average", "prob_of_effect"] = prob_effect
+                    stats_table.loc["average", "relative_mean"] = rel_effect * 100.0
+                    stats_table.loc["average", "relative_hdi_lower"] = rel_ci_lower * 100.0
+                    stats_table.loc["average", "relative_hdi_upper"] = rel_ci_upper * 100.0
+                if "cumulative" in stats_table.index:
+                    stats_table.loc["cumulative", "mean"] = cum_effect
+                    stats_table.loc["cumulative", "hdi_lower"] = cum_ci_lower
+                    stats_table.loc["cumulative", "hdi_upper"] = cum_ci_upper
+                    stats_table.loc["cumulative", "p_two_sided"] = cum_p_val
+        except Exception as e:
+            print(f"Failed to override CausalPy stats from posterior_predictive: {e}")
+        # -------------------------------------------------------------
+
         # --- 4. Generate Plots ---
         plot_path = None
         try:
