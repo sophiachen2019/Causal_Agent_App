@@ -10,12 +10,10 @@ statsmodels
 plotly
 rpy2
 causalpy
-arviz<0.22
 
 # --- Metadata ---
-# Release: 5.2.0 | 2026-04-26 | Extended CausalPy (Bayesian Synthetic Control) with covariate support; added Bar Mode toggle (Stacked/Grouped) to Chart Builder; refined Configuration Guide consistency; pinned ArviZ for backend compatibility.
+# Release: 5.2.0 | 2026-04-26 | Extended CausalPy (Bayesian Synthetic Control) with covariate support and proper `posterior_predictive` evaluation; added Bar Mode toggle to Chart Builder; enforced Configuration Guide consistency; resolved `zoo` and `ArviZ` dependencies.
 # Release: 5.1.0 | 2026-04-12 | Added CausalPy (Bayesian Synthetic Control) as pure-Python alternative to GeoLift; updated User Guide and AI knowledge base.
-
 # Release: 5.0.0 | 2026-04-05 | Added data simulation engine and interactive AI-assistant experience for data exploration and causal analysis; advanced data preprocessing (Conditional Override, Resampling); backend API rate limiting.
 # Release: 4.5.0 | 2026-03-29 | Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, extracted full 95% Confidence Intervals, and migrated core charts to Plotly Express.
 # Release: 4.4.0 | 2026-03-26 | Modernized UI with custom theme configuration, and new HTML-based user guide.
