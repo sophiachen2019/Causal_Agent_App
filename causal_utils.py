@@ -29,6 +29,52 @@ try:
 except ImportError:
     pass
 
+def assess_data_readiness(df):
+    """
+    Evaluates dataset mathematically for Causal Inference PyMC blocking issues vs statistical warnings.
+    Returns:
+       dict: { 'status': 'red', 'yellow', or 'green',
+               'blocking': [...strings...],
+               'warnings': [...strings...] }
+    """
+    blocking = []
+    warnings = []
+    
+    # 1. Total Rows
+    if len(df) < 15:
+        blocking.append(f"Only {len(df)} rows found. Less than 15 rows is mathematically insufficient to split pre/post periods for Synth/ITS.")
+        
+    # 2. Extreme Missing Data
+    total_cells = df.size
+    total_missing = df.isnull().sum().sum()
+    if total_missing / total_cells > 0.5:
+        blocking.append(f"More than 50% of the dataset is missing ({total_missing} null values).")
+    elif total_missing > 0:
+        warnings.append(f"There are {total_missing} missing (NaN/null) values. Ensure imputation is checked before modeling.")
+        
+    # 3. Numeric Checking (Zero Variance / Outliers)
+    num_cols = df.select_dtypes(include=['number']).columns
+    for col in num_cols:
+        col_std = df[col].std()
+        if pd.isna(col_std) or col_std == 0:
+            blocking.append(f"Column '{col}' has zero variance (constant value). This will crash linear estimators and PyMC.")
+        else:
+            outliers = (df[col] - df[col].mean()).abs() > 4 * col_std
+            if outliers.sum() > 0:
+                warnings.append(f"Column '{col}' has {outliers.sum()} extreme outliers (>4 StdDevs). PyMC may diverge or coefficients may skew.")
+                
+    status = "green"
+    if len(warnings) > 0:
+        status = "yellow"
+    if len(blocking) > 0:
+        status = "red"
+        
+    return {
+        "status": status,
+        "blocking": list(set(blocking)),
+        "warnings": list(set(warnings))
+    }
+
 def generate_script(data_source, treatment, outcome, confounders, time_period, estimation_method, 
                     impute_enable, num_impute_method, num_custom_val, cat_impute_method, cat_custom_val,
                     winsorize_enable, winsorize_cols, percentile,

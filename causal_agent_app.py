@@ -639,61 +639,78 @@ with tab_eda:
     if len(df) == 0:
         st.info("No data loaded yet. Generate or upload a dataset to see summary statistics.")
     else:
-      # AI Data Quality Summary (on-demand)
-      if st.button("🧠 Generate AI Data Quality Summary", key="ai_quality_btn"):
-          if not check_api_limit():
-              st.stop()
-          with st.spinner("AI is analyzing data quality..."):
-              summary = data_generation_utils.generate_data_quality_summary(df, chatbot_utils.get_api_key())
-              st.session_state.data_quality_summary = summary
-      if st.session_state.get('data_quality_summary'):
-          st.info(st.session_state.data_quality_summary)
-
-      with st.expander("Show Summary Statistics", expanded=False):
-        df_summary = df.copy()
-        for col in df_summary.columns:
-            unique_vals = df_summary[col].dropna().unique()
-            if len(unique_vals) <= 2:
-                is_binary = all(val in [0, 1, True, False] for val in unique_vals)
-                if is_binary:
-                     df_summary[col] = df_summary[col].astype(str)
-
-        st.markdown("**Numeric Statistics**")
-        st.dataframe(df_summary.describe().round(2).astype(str))
-        
-        st.markdown("**Categorical Statistics**")
-        cat_cols = df_summary.select_dtypes(include=['object', 'category']).columns
-        if len(cat_cols) > 0:
-            for col in cat_cols:
-                st.markdown(f"**{col}**")
-                counts = df_summary[col].value_counts()
-                percent = df_summary[col].value_counts(normalize=True) * 100
-                summary_df = pd.DataFrame({'Count': counts, 'Percentage': percent})
-                st.dataframe(summary_df.style.format({'Percentage': '{:.2f}%'}))
-        else:
-            st.info("No categorical variables found.")
-        
-        st.markdown("**Missing Values**")
-        missing_info = pd.DataFrame({
-            'Missing Count': df.isnull().sum(),
-            'Missing Percentage': (df.isnull().sum() / len(df)) * 100
-        })
-        st.dataframe(missing_info.style.format({'Missing Percentage': '{:.2f}%'}))
-
-      with st.expander("Show Correlation Matrix", expanded=False):
-        st.markdown("**Correlation Matrix**")
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        
-        if len(numeric_cols) > 1:
-            corr_cols = st.multiselect("Select Variables", numeric_cols, default=numeric_cols)
-            
-            if corr_cols:
-                corr_matrix = df[corr_cols].corr()
-                st.dataframe(corr_matrix.style.background_gradient(cmap='coolwarm', axis=None).format("{:.2f}"))
+        st.markdown("### 🚦 Mathematical Readiness Assessment")
+        try:
+            readiness = causal_utils.assess_data_readiness(df)
+            if readiness['status'] == 'red':
+                st.error("**🔴 Not Ready: Blocking Errors Detected**\n\nThe following issues ensure PyMC or structural solvers will fail. Fix these before running Quasi-Experimental analysis.")
+                for b in readiness['blocking']:
+                    st.write(f"- {b}")
+            elif readiness['status'] == 'yellow':
+                st.warning("**🟡 Ready with Warnings**\n\nThe dataset is structurally sound but contains potential statistical anomalies that may introduce noise.")
+                for w in readiness['warnings']:
+                    st.write(f"- {w}")
             else:
-                st.info("Please select at least one variable.")
-        else:
-            st.info("Not enough numeric variables to compute correlation.")
+                st.success("**🟢 Fully Ready**\n\nThe dataset structure is complete and mathematically sound. No blocking errors or severe outliers detected.")
+        except Exception as e:
+            st.warning(f"Could not calculate readiness: {e}")
+            
+        st.write("---")
+        # AI Data Quality Summary (on-demand)
+        if st.button("🧠 Generate AI Data Quality Summary", key="ai_quality_btn"):
+            if not check_api_limit():
+                st.stop()
+            with st.spinner("AI is analyzing data quality..."):
+                summary = data_generation_utils.generate_data_quality_summary(df, chatbot_utils.get_api_key())
+                st.session_state.data_quality_summary = summary
+        if st.session_state.get('data_quality_summary'):
+            st.info(st.session_state.data_quality_summary)
+
+        with st.expander("Show Summary Statistics", expanded=False):
+            df_summary = df.copy()
+            for col in df_summary.columns:
+                unique_vals = df_summary[col].dropna().unique()
+                if len(unique_vals) <= 2:
+                    is_binary = all(val in [0, 1, True, False] for val in unique_vals)
+                    if is_binary:
+                         df_summary[col] = df_summary[col].astype(str)
+    
+            st.markdown("**Numeric Statistics**")
+            st.dataframe(df_summary.describe().round(2).astype(str))
+            
+            st.markdown("**Categorical Statistics**")
+            cat_cols = df_summary.select_dtypes(include=['object', 'category']).columns
+            if len(cat_cols) > 0:
+                for col in cat_cols:
+                    st.markdown(f"**{col}**")
+                    counts = df_summary[col].value_counts()
+                    percent = df_summary[col].value_counts(normalize=True) * 100
+                    summary_df = pd.DataFrame({'Count': counts, 'Percentage': percent})
+                    st.dataframe(summary_df.style.format({'Percentage': '{:.2f}%'}))
+            else:
+                st.info("No categorical variables found.")
+            
+            st.markdown("**Missing Values**")
+            missing_info = pd.DataFrame({
+                'Missing Count': df.isnull().sum(),
+                'Missing Percentage': (df.isnull().sum() / len(df)) * 100
+            })
+            st.dataframe(missing_info.style.format({'Missing Percentage': '{:.2f}%'}))
+    
+        with st.expander("Show Correlation Matrix", expanded=False):
+            st.markdown("**Correlation Matrix**")
+            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            
+            if len(numeric_cols) > 1:
+                corr_cols = st.multiselect("Select Variables", numeric_cols, default=numeric_cols)
+                
+                if corr_cols:
+                    corr_matrix = df[corr_cols].corr()
+                    st.dataframe(corr_matrix.style.background_gradient(cmap='coolwarm', axis=None).format("{:.2f}"))
+                else:
+                    st.info("Please select at least one variable.")
+            else:
+                st.info("Not enough numeric variables to compute correlation.")
 
     # --- Data Preprocessing ---
     st.subheader("4. Data Preprocessing")
