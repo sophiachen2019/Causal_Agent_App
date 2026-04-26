@@ -1083,6 +1083,13 @@ with tab_eda:
         else:
             options = [None] + list(df_plot_source.columns)
             color_var = st.selectbox("Color/Group (Optional)", options)
+        
+        # Add Bar Mode selection
+        bar_mode = "stack" # Default
+        if chart_type == "Bar Chart" and color_var is not None:
+            bar_mode = st.radio("Bar Mode", ["Stacked", "Grouped"], horizontal=True, index=0).lower()
+            if bar_mode == "stacked": bar_mode = "stack"
+            elif bar_mode == "grouped": bar_mode = "group"
 
     # --- Facet Options ---
     col_fc1, col_fc2 = st.columns([3, 1])
@@ -1124,7 +1131,7 @@ with tab_eda:
     # --- Plotting Loop (Facet Support) ---
     
     # Define plotting function to reuse
-    def plot_chart(data, x, y, color, title_suffix=""):
+    def plot_chart(data, x, y, color, bar_mode="stack", title_suffix=""):
         # Fix for continuous color scale on binary/categorical variables
         # If the color variable has few unique values, treat it as categorical (string)
         # This prevents Streamlit/Altair from using a continuous gradient for 0/1 variables.
@@ -1202,7 +1209,7 @@ with tab_eda:
             fig = px.line(data, x=x, y=y, color=color, title=f"Line Chart {title_suffix}")
             st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Bar Chart":
-            fig = px.bar(data, x=x, y=y, color=color, title=f"Bar Chart {title_suffix}")
+            fig = px.bar(data, x=x, y=y, color=color, barmode=bar_mode, title=f"Bar Chart {title_suffix}")
             st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Histogram":
             fig, ax = plt.subplots()
@@ -1258,12 +1265,12 @@ with tab_eda:
             # Filter data
             df_facet = df_plot[df_plot[facet_col] == facet_val]
             if len(df_facet) > 0:
-                plot_chart(df_facet, x_var, y_vars, color_var, title_suffix=f"({facet_val})")
+                plot_chart(df_facet, x_var, y_vars, color_var, bar_mode=bar_mode, title_suffix=f"({facet_val})")
             else:
                 st.warning(f"No data for {facet_val}")
     else:
         # Single Chart
-        plot_chart(df_plot, x_var, y_vars, color_var)
+        plot_chart(df_plot, x_var, y_vars, color_var, bar_mode=bar_mode)
 
 
 # ==========================================
