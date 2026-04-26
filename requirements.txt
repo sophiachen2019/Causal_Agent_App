@@ -12,7 +12,7 @@ rpy2
 causalpy
 
 # --- Metadata ---
-# Release: 5.2.0 | 2026-04-26 | Extended CausalPy (Bayesian Synthetic Control) with covariate support and proper `posterior_predictive` evaluation; added Bar Mode toggle to Chart Builder; enforced Configuration Guide consistency; resolved `zoo` and `ArviZ` dependencies.
+# Release: 5.2.0 | 2026-04-26 | Extended CausalPy (Bayesian Synthetic Control) with covariate support and proper `posterior_predictive` evaluation; enforced Configuration Guide consistency; resolved `zoo` and `ArviZ` dependencies.
 # Release: 5.1.0 | 2026-04-12 | Added CausalPy (Bayesian Synthetic Control) as pure-Python alternative to GeoLift; updated User Guide and AI knowledge base.
 # Release: 5.0.0 | 2026-04-05 | Added data simulation engine and interactive AI-assistant experience for data exploration and causal analysis; advanced data preprocessing (Conditional Override, Resampling); backend API rate limiting.
 # Release: 4.5.0 | 2026-03-29 | Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, extracted full 95% Confidence Intervals, and migrated core charts to Plotly Express.
