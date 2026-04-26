@@ -70,7 +70,9 @@ Navigate through the tabs:
 
 ## 📝 Version History
 
-- **v5.0.0 (Latest)**: Added CausalPy (Bayesian Synthetic Control) as a pure-Python alternative to GeoLift with proper two-sided HDI intervals; data quality simulation (Low/Medium/High); advanced preprocessing (Conditional Override, Resampling); backend API rate limiting; dataset download; updated User Guide and AI knowledge base.
+- **v5.2.0 (Latest)**: Extended CausalPy (Bayesian Synthetic Control) with covariate support; added Bar Mode toggle (Stacked/Grouped) to Chart Builder; refined Configuration Guide consistency; pinned ArviZ for backend compatibility.
+- **v5.1.0**: Added CausalPy (Bayesian Synthetic Control) as pure-Python alternative to GeoLift; updated User Guide and AI knowledge base.
+- **v5.0.0**: Added data quality simulation engine (Low/Medium/High) and interactive AI-assistant experience for data exploration and causal analysis; advanced data preprocessing (Conditional Override, Resampling); backend API rate limiting; dataset download.
 - **v4.5.0**: Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, documented rigorous 95% Confidence Intervals for all metrics, and migrated core plots to Plotly Express.
 - **v4.4.0**: Modernized UI with custom theme configuration and new HTML-based user guide.
 - **v4.3.0**: Added missing advanced parameters for GeoLift analysis and embedded paper reference links.
