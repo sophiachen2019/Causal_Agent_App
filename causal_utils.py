@@ -1744,6 +1744,16 @@ def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
     import matplotlib.pyplot as plt
     import tempfile
     import os
+    import arviz as az
+
+    # --- ArviZ compatibility shim ---
+    # Some arviz versions (transition to 1.0) remove InferenceData from top-level
+    if not hasattr(az, 'InferenceData'):
+        try:
+            from arviz.data import InferenceData
+            az.InferenceData = InferenceData
+        except ImportError:
+            pass
 
     try:
         # --- 1. Data Preparation ---
