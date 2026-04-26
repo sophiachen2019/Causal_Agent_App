@@ -1746,7 +1746,8 @@ def run_geolift_power(df, date_col, geo_col, kpi_col, treatment_duration=14, cut
 def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
                                     intervention_date, treatment_duration=60,
                                     hdi_prob=0.95, direction="two-sided",
-                                    covariates=None):
+                                    covariates=None,
+                                    tune=1000, draws=1000, chains=4, target_accept=0.95):
     """
     Runs Bayesian Synthetic Control using CausalPy (PyMC backend).
     Returns a structured dict with metrics, plots, and summary text.
@@ -1818,7 +1819,10 @@ def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
             treated_units=[treated_geo_str],
             control_units=control_cols,
             model=WeightedSumFitter(sample_kwargs={
-                "target_accept": 0.95,
+                "tune": tune,
+                "draws": draws,
+                "chains": chains,
+                "target_accept": target_accept,
                 "random_seed": 42,
                 "progressbar": False
             }),

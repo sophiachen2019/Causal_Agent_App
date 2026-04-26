@@ -584,7 +584,14 @@ def generate_config_guidance(df: pd.DataFrame, api_key: str, method: str, treatm
     2. **Key Assumptions**: What assumptions must hold for this method? How to check them.
     3. **Potential Pitfalls**: Common mistakes with this method and how to avoid them.
     4. **Expected Output**: What to look for in the results.
+    """
     
+    if "CausalPy" in method:
+        prompt += """
+    5. **Advanced Parameters (Speed Up)**: Explicitly mention that users can open the 'Advanced PyMC Sampling Parameters' expander and lower 'MCMC Draws' and 'Tuning Steps' to 500, or reduce 'Target Acceptance' to 0.85 to dramatically speed up the Bayesian inference.
+    """
+    
+    prompt += """
     Keep it concise and actionable. Do NOT use code blocks.
     """
     

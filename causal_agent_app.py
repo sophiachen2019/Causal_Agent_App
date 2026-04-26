@@ -1797,6 +1797,16 @@ with tab_config:
                                             help="Two-sided tests for any effect; 'increase'/'decrease' for directional hypotheses.", key="cp_dir")
                 cp_hdi = st.slider("HDI Credible Interval Width", 0.80, 0.99, 0.95, step=0.01, 
                                     help="Width of the Highest Density Interval (Bayesian CI).", key="cp_hdi")
+                
+                st.divider()
+                st.markdown("**Advanced PyMC Sampling Parameters**")
+                col_mc1, col_mc2 = st.columns(2)
+                with col_mc1:
+                    cp_tune = st.number_input("Tuning Steps", min_value=100, max_value=4000, value=1000, step=100, help="Number of MCMC tuning steps. Reduce to 500 for faster execution.", key="cp_tune")
+                    cp_draws = st.number_input("MCMC Draws", min_value=100, max_value=4000, value=1000, step=100, help="Number of posterior samples. Reduce to 500 for faster execution.", key="cp_draws")
+                with col_mc2:
+                    cp_chains = st.number_input("Chains", min_value=1, max_value=8, value=4, step=1, help="Parallel MCMC chains. Reduce to 2 for smaller instances.", key="cp_chains")
+                    cp_target_accept = st.slider("Target Acceptance", 0.70, 0.99, 0.95, step=0.01, help="PyMC target_accept. Lowering to 0.85 greatly speeds up convergence but may diverge on complex data.", key="cp_target_accept")
             
             if st.button("Run CausalPy Analysis", type="primary"):
                 st.write("---")
@@ -1808,7 +1818,11 @@ with tab_config:
                             treatment_duration=cp_duration,
                             hdi_prob=cp_hdi,
                             direction=cp_direction,
-                            covariates=cp_covariates
+                            covariates=cp_covariates,
+                            tune=cp_tune,
+                            draws=cp_draws,
+                            chains=cp_chains,
+                            target_accept=cp_target_accept
                         )
                         st.session_state.quasi_results = {
                             'method': 'CausalPy (Bayesian Synthetic Control)',
