@@ -10,6 +10,7 @@ statsmodels
 plotly
 rpy2
 causalpy
+arviz==0.21.0
 
 # --- Metadata ---
 # Release: 5.2.0 | 2026-04-26 | Extended CausalPy (Bayesian Synthetic Control) with covariate support and proper `posterior_predictive` evaluation; enforced Configuration Guide consistency; resolved `zoo` and `ArviZ` dependencies.
