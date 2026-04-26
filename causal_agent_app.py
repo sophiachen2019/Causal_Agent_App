@@ -639,23 +639,6 @@ with tab_eda:
     if len(df) == 0:
         st.info("No data loaded yet. Generate or upload a dataset to see summary statistics.")
     else:
-        st.markdown("### 🚦 Mathematical Readiness Assessment")
-        try:
-            readiness = causal_utils.assess_data_readiness(df)
-            if readiness['status'] == 'red':
-                st.error("**🔴 Not Ready: Blocking Errors Detected**\n\nThe following issues ensure PyMC or structural solvers will fail. Fix these before running Quasi-Experimental analysis.")
-                for b in readiness['blocking']:
-                    st.write(f"- {b}")
-            elif readiness['status'] == 'yellow':
-                st.warning("**🟡 Ready with Warnings**\n\nThe dataset is structurally sound but contains potential statistical anomalies that may introduce noise.")
-                for w in readiness['warnings']:
-                    st.write(f"- {w}")
-            else:
-                st.success("**🟢 Fully Ready**\n\nThe dataset structure is complete and mathematically sound. No blocking errors or severe outliers detected.")
-        except Exception as e:
-            st.warning(f"Could not calculate readiness: {e}")
-            
-        st.write("---")
         # AI Data Quality Summary (on-demand)
         if st.button("🧠 Generate AI Data Quality Summary", key="ai_quality_btn"):
             if not check_api_limit():
@@ -665,6 +648,24 @@ with tab_eda:
                 st.session_state.data_quality_summary = summary
         if st.session_state.get('data_quality_summary'):
             st.info(st.session_state.data_quality_summary)
+            
+            st.markdown("### 🚦 Mathematical Readiness Assessment")
+            try:
+                readiness = causal_utils.assess_data_readiness(df)
+                if readiness['status'] == 'red':
+                    st.error("**🔴 Not Ready: Blocking Errors Detected**\n\nThe following issues ensure PyMC or structural solvers will fail. Fix these before running Quasi-Experimental analysis.")
+                    for b in readiness['blocking']:
+                        st.write(f"- {b}")
+                elif readiness['status'] == 'yellow':
+                    st.warning("**🟡 Ready with Warnings**\n\nThe dataset is structurally sound but contains potential statistical anomalies that may introduce noise.")
+                    for w in readiness['warnings']:
+                        st.write(f"- {w}")
+                else:
+                    st.success("**🟢 Fully Ready**\n\nThe dataset structure is complete and mathematically sound. No blocking errors or severe outliers detected.")
+            except Exception as e:
+                st.warning(f"Could not calculate readiness: {e}")
+                
+            st.write("---")
 
         with st.expander("Show Summary Statistics", expanded=False):
             df_summary = df.copy()
