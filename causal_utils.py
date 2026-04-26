@@ -1747,29 +1747,49 @@ def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
 
     try:
         # --- 1. Data Preparation ---
-        df_work = df[[date_col, geo_col, kpi_col]].copy()
+        cols_to_keep = [date_col, geo_col, kpi_col]
+        if covariates:
+            cols_to_keep.extend([c for c in covariates if c in df.columns and c not in cols_to_keep])
+            
+        df_work = df[cols_to_keep].copy()
         df_work[date_col] = pd.to_datetime(df_work[date_col])
         df_work[kpi_col] = pd.to_numeric(df_work[kpi_col], errors='coerce')
+        if covariates:
+            for c in covariates:
+                if c in df_work.columns:
+                    df_work[c] = pd.to_numeric(df_work[c], errors='coerce')
         df_work = df_work.dropna()
 
         # Pivot to wide format: rows=dates, columns=regions
-        df_wide = df_work.pivot_table(index=date_col, columns=geo_col, values=kpi_col, aggfunc='mean')
+        pivoted_kpi = df_work.pivot_table(index=date_col, columns=geo_col, values=kpi_col, aggfunc='mean')
+        
+        if covariates and len(covariates) > 0:
+            # Join global covariates (mean per date)
+            df_covs = df_work.groupby(date_col)[covariates].mean()
+            df_wide = pd.concat([pivoted_kpi, df_covs], axis=1)
+        else:
+            df_wide = pivoted_kpi
+            
         df_wide = df_wide.sort_index().reset_index(drop=False)
         df_wide = df_wide.set_index(date_col)
 
         # Validate treated geo exists
         treated_geo_str = str(treated_geo)
-        if treated_geo_str not in df_wide.columns:
-            return {"error": f"Treated geography '{treated_geo_str}' not found in pivoted columns: {list(df_wide.columns)}"}
+        if treated_geo_str not in pivoted_kpi.columns:
+            return {"error": f"Treated geography '{treated_geo_str}' not found in pivoted columns: {list(pivoted_kpi.columns)}"}
 
-        # Identify control columns
-        control_cols = [c for c in df_wide.columns if c != treated_geo_str]
+        # Identify control columns (other units + covariates)
+        control_cols = [c for c in pivoted_kpi.columns if c != treated_geo_str]
+        if covariates:
+            control_cols.extend([c for c in covariates if c in df_wide.columns])
+            
         if len(control_cols) == 0:
-            return {"error": "No control regions found. Need at least one untreated region."}
+            return {"error": "No control predictors found. Need at least one untreated region or covariate."}
 
         # Drop any control columns with all NaN
         df_wide = df_wide.dropna(axis=1, how='all')
-        control_cols = [c for c in df_wide.columns if c != treated_geo_str]
+        # Refresh control_cols after dropping all-NaN
+        control_cols = [c for c in control_cols if c in df_wide.columns]
 
         # Forward-fill remaining NaN
         df_wide = df_wide.ffill().bfill()

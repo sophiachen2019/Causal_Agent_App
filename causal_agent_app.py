@@ -1754,6 +1754,14 @@ with tab_config:
                 if cp_geo in df.columns:
                     treated_geo_options_cp = df[cp_geo].dropna().astype(str).unique().tolist()
                 cp_treated = st.selectbox("Treated Geography", treated_geo_options_cp, key="cp_treat")
+                
+                # Covariates for CausalPy
+                cp_covariates = st.multiselect(
+                    "Covariates (Controls/Predictors)", 
+                    [c for c in num_cols if c not in [cp_kpi]], 
+                    help="Additional time-series features to help construct the synthetic control.",
+                    key="cp_covs"
+                )
             
             min_date_cp = df[cp_date].min()
             max_date_cp = df[cp_date].max()
@@ -1788,7 +1796,8 @@ with tab_config:
                             str(cp_intervention_date),
                             treatment_duration=cp_duration,
                             hdi_prob=cp_hdi,
-                            direction=cp_direction
+                            direction=cp_direction,
+                            covariates=cp_covariates
                         )
                         st.session_state.quasi_results = {
                             'method': 'CausalPy (Bayesian Synthetic Control)',

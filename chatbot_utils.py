@@ -174,7 +174,7 @@ def run_synthetic_control_geolift(date_col: str, geo_col: str, treated_geo: str,
     except Exception as e:
         return f"Error running GeoLift: {e}"
 
-def run_causalpy_analysis(date_col: str, geo_col: str, treated_geo: str, kpi_col: str, intervention_date: str, treatment_duration: int = 60, direction: str = "two-sided") -> str:
+def run_causalpy_analysis(date_col: str, geo_col: str, treated_geo: str, kpi_col: str, intervention_date: str, treatment_duration: int = 60, direction: str = "two-sided", covariates: list = None) -> str:
     """
     Runs CausalPy Bayesian Synthetic Control on Panel Data. Pure Python alternative to GeoLift with proper two-sided HDI intervals and posterior probabilities.
     intervention_date must be YYYY-MM-DD. direction can be "two-sided", "increase", or "decrease".
@@ -184,7 +184,7 @@ def run_causalpy_analysis(date_col: str, geo_col: str, treated_geo: str, kpi_col
     df = st.session_state.df
     
     try:
-        res = causal_utils.run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo, intervention_date, treatment_duration=treatment_duration, direction=direction)
+        res = causal_utils.run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo, intervention_date, treatment_duration=treatment_duration, direction=direction, covariates=covariates)
         if 'error' in res:
             return f"Error in CausalPy: {res['error']}"
         
