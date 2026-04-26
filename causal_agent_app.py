@@ -1292,7 +1292,6 @@ with tab_config:
     if len(df) == 0:
         st.info("⚠️ No data loaded yet. Please go to the **Exploratory Analysis** tab to load or generate a dataset first.")
     else:
-        # AI Assistance Row
         col_ai1, col_ai2 = st.columns(2)
         with col_ai1:
             _tab_type = "observational" if _is_observational else "quasi_experimental"
@@ -1302,30 +1301,8 @@ with tab_config:
                 with st.spinner("AI is analyzing your data..."):
                     rec = data_generation_utils.generate_method_recommendation(df, chatbot_utils.get_api_key(), tab_type=_tab_type)
                     st.session_state.config_method_rec = rec
-        with col_ai2:
-            if st.button("🧠 Configuration Guide", key="config_guide_btn"):
-                if not check_api_limit():
-                    st.stop()
-                with st.spinner("AI is generating guidance..."):
-                    if _is_observational:
-                        _method_name = estimation_method if 'estimation_method' in dir() else "Linear/Logistic Regression (OLS/Logit)"
-                    else:
-                        _method_name = st.session_state.get('_quasi_method', None)
-                        if not _method_name:
-                            # Infer from data structure
-                            has_geo = any(k in c.lower() for c in df.columns for k in ['region', 'geo', 'city', 'state', 'market', 'location'])
-                            if has_geo:
-                                _method_name = "CausalPy (Bayesian Synthetic Control)"
-                            else:
-                                _method_name = "CausalImpact (Bayesian Time Series)"
-                    # Pass any existing method recommendation for consistency
-                    _existing_rec = st.session_state.get('config_method_rec', '')
-                    guidance = data_generation_utils.generate_config_guidance(df, chatbot_utils.get_api_key(), method=_method_name, method_recommendation=_existing_rec)
-                    st.session_state.config_guide = guidance
         if st.session_state.get('config_method_rec'):
             st.info(st.session_state.config_method_rec)
-        if st.session_state.get('config_guide'):
-            st.success(st.session_state.config_guide)
     
     st.divider()
     
@@ -1350,6 +1327,17 @@ with tab_config:
                 "Meta-Learner: T-Learner"
             ]
         )
+
+        # Configuration Guide button (now aware of selected method)
+        if st.button("🧠 Configuration Guide", key="config_guide_obs_btn"):
+            if not check_api_limit():
+                st.stop()
+            with st.spinner("AI is generating guidance..."):
+                _existing_rec = st.session_state.get('config_method_rec', '')
+                guidance = data_generation_utils.generate_config_guidance(df, chatbot_utils.get_api_key(), method=estimation_method, method_recommendation=_existing_rec)
+                st.session_state.config_guide = guidance
+        if st.session_state.get('config_guide'):
+            st.success(st.session_state.config_guide)
 
         treatment = st.selectbox("Treatment (Action)", df.columns, index=get_index(df.columns, 'Feature_Adoption', 2))
     
@@ -1412,6 +1400,17 @@ with tab_config:
             help="DiD requires Control Group + Pre/Post. CausalImpact requires Pre-Period time series. GeoLift/CausalPy use Synthetic Control for geo experiments."
         )
         st.session_state._quasi_method = quasi_method
+
+        # Configuration Guide button (now aware of selected method)
+        if st.button("🧠 Configuration Guide", key="config_guide_btn"):
+            if not check_api_limit():
+                st.stop()
+            with st.spinner("AI is generating guidance..."):
+                _existing_rec = st.session_state.get('config_method_rec', '')
+                guidance = data_generation_utils.generate_config_guidance(df, chatbot_utils.get_api_key(), method=quasi_method, method_recommendation=_existing_rec)
+                st.session_state.config_guide = guidance
+        if st.session_state.get('config_guide'):
+            st.success(st.session_state.config_guide)
     
         # --- Difference-in-Differences ---
         if quasi_method == "Difference-in-Differences (DiD)":
