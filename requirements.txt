@@ -1,15 +1,15 @@
-streamlit
-dowhy
-econml
-pandas
-numpy
-scikit-learn
-matplotlib
-google-genai
-statsmodels
-plotly
-rpy2
-causalpy
+streamlit==1.52.1
+dowhy==0.14
+econml==0.16.0
+pandas==2.3.3
+numpy==2.3.5
+scikit-learn==1.6.1
+matplotlib==3.10.8
+google-genai==1.57.0
+statsmodels==0.14.6
+plotly==6.5.2
+rpy2==3.6.5
+causalpy==0.8.0
 arviz==0.21.0
 
 # --- Metadata ---
