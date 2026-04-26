@@ -10,6 +10,7 @@ statsmodels
 plotly
 rpy2
 causalpy
+arviz<0.22
 
 # --- Metadata ---
 # Release: 5.1.0 | 2026-04-12 | Added CausalPy (Bayesian Synthetic Control) as pure-Python alternative to GeoLift; updated User Guide and AI knowledge base.
