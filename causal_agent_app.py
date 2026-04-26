@@ -3084,24 +3084,115 @@ if st.session_state.get('analysis_run', False):
                         df_results = df.copy()
                         df_results['Estimated_ITE'] = ite
                     
-                        # Feature Importance (Causal Forest only)
-                        if estimation_method == "Generalized Random Forests (CausalForestDML)":
-                            st.markdown("#### Feature Importance")
-                            # EconML CausalForest has feature_importances_
-                            if hasattr(estimate.estimator, 'feature_importances_'):
-                                importances = estimate.estimator.feature_importances_
-                                feat_names = confounders
+                        # Feature Importance via SHAP (CausalForest and LinearDML)
+                        if estimation_method in ["Generalized Random Forests (CausalForestDML)", "Linear Double Machine Learning (LinearDML)"]:
+                            st.markdown("#### SHAP Feature Importance")
+                            st.markdown("How each feature contributes to **treatment effect heterogeneity** (not outcome prediction).")
                             
-                                fig, ax = plt.subplots()
-                                y_pos = np.arange(len(feat_names))
-                                ax.barh(y_pos, importances, align='center')
-                                ax.set_yticks(y_pos)
-                                ax.set_yticklabels(feat_names)
-                                ax.invert_yaxis()  # labels read top-to-bottom
-                                ax.set_title("Feature Importance for Heterogeneity")
-                                ax.set_title("Feature Importance for Heterogeneity")
-                                st.pyplot(fig)
-                                plt.close(fig)
+                            try:
+                                import shap
+                                
+                                # Get the underlying EconML estimator
+                                econml_estimator = None
+                                if hasattr(estimate.estimator, 'estimator'):
+                                    econml_estimator = estimate.estimator.estimator
+                                elif hasattr(estimate, 'estimator'):
+                                    econml_estimator = estimate.estimator
+                                
+                                if econml_estimator is not None and hasattr(econml_estimator, 'effect'):
+                                    X_shap = df[confounders].copy()
+                                    
+                                    # Use a wrapper function that predicts CATE given X
+                                    def cate_predict(X_input):
+                                        return econml_estimator.effect(X_input).flatten()
+                                    
+                                    # Use KernelExplainer for model-agnostic SHAP (works for both LinearDML and CausalForest)
+                                    # Sample background data for efficiency
+                                    background_size = min(100, len(X_shap))
+                                    background = shap.sample(X_shap, background_size, random_state=42)
+                                    
+                                    with st.spinner("Computing SHAP values (this may take a moment)..."):
+                                        explainer = shap.KernelExplainer(cate_predict, background)
+                                        shap_sample_size = min(200, len(X_shap))
+                                        X_sample = X_shap.sample(n=shap_sample_size, random_state=42) if len(X_shap) > shap_sample_size else X_shap
+                                        shap_values = explainer.shap_values(X_sample, silent=True)
+                                    
+                                    # Tab layout for SHAP visualizations
+                                    shap_tab1, shap_tab2 = st.tabs(["Beeswarm Plot", "Bar Plot"])
+                                    
+                                    with shap_tab1:
+                                        st.markdown("Each dot = one observation. Position = SHAP value (impact on predicted treatment effect). Color = feature value.")
+                                        fig_beeswarm, ax_beeswarm = plt.subplots(figsize=(10, max(4, len(confounders) * 0.5)))
+                                        shap.summary_plot(shap_values, X_sample, show=False, plot_size=None)
+                                        st.pyplot(fig_beeswarm)
+                                        plt.close(fig_beeswarm)
+                                    
+                                    with shap_tab2:
+                                        st.markdown("Mean |SHAP value| = average magnitude of each feature's impact on treatment effect prediction.")
+                                        fig_bar, ax_bar = plt.subplots(figsize=(10, max(4, len(confounders) * 0.5)))
+                                        shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False, plot_size=None)
+                                        st.pyplot(fig_bar)
+                                        plt.close(fig_bar)
+                                    
+                                    # Summary table
+                                    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+                                    shap_df = pd.DataFrame({
+                                        "Feature": confounders,
+                                        "Mean |SHAP Value|": mean_abs_shap,
+                                        "Relative Importance (%)": (mean_abs_shap / mean_abs_shap.sum() * 100) if mean_abs_shap.sum() > 0 else mean_abs_shap
+                                    }).sort_values("Mean |SHAP Value|", ascending=False)
+                                    
+                                    with st.expander("📊 SHAP Importance Table"):
+                                        st.dataframe(shap_df.style.format({
+                                            "Mean |SHAP Value|": "{:.4f}",
+                                            "Relative Importance (%)": "{:.1f}%"
+                                        }))
+                                    
+                                    top_feature = shap_df.iloc[0]["Feature"]
+                                    st.success(f"**{top_feature}** is the strongest driver of treatment effect heterogeneity ({shap_df.iloc[0]['Relative Importance (%)']:.1f}% of total importance).")
+                                    
+                                else:
+                                    st.warning("Could not access the underlying estimator for SHAP analysis.")
+                                    # Fallback to basic feature_importances_ for CausalForest
+                                    if estimation_method == "Generalized Random Forests (CausalForestDML)" and hasattr(estimate.estimator, 'feature_importances_'):
+                                        importances = estimate.estimator.feature_importances_
+                                        fig, ax = plt.subplots()
+                                        y_pos = np.arange(len(confounders))
+                                        ax.barh(y_pos, importances, align='center')
+                                        ax.set_yticks(y_pos)
+                                        ax.set_yticklabels(confounders)
+                                        ax.invert_yaxis()
+                                        ax.set_title("Feature Importance for Heterogeneity (Built-in)")
+                                        st.pyplot(fig)
+                                        plt.close(fig)
+                                
+                            except ImportError:
+                                st.warning("SHAP library not installed. Install with: `pip install shap`")
+                                # Fallback to built-in feature importance for CausalForest
+                                if estimation_method == "Generalized Random Forests (CausalForestDML)" and hasattr(estimate.estimator, 'feature_importances_'):
+                                    importances = estimate.estimator.feature_importances_
+                                    fig, ax = plt.subplots()
+                                    y_pos = np.arange(len(confounders))
+                                    ax.barh(y_pos, importances, align='center')
+                                    ax.set_yticks(y_pos)
+                                    ax.set_yticklabels(confounders)
+                                    ax.invert_yaxis()
+                                    ax.set_title("Feature Importance for Heterogeneity")
+                                    st.pyplot(fig)
+                                    plt.close(fig)
+                            except Exception as e:
+                                st.warning(f"SHAP computation failed: {e}. Falling back to built-in importance.")
+                                if estimation_method == "Generalized Random Forests (CausalForestDML)" and hasattr(estimate.estimator, 'feature_importances_'):
+                                    importances = estimate.estimator.feature_importances_
+                                    fig, ax = plt.subplots()
+                                    y_pos = np.arange(len(confounders))
+                                    ax.barh(y_pos, importances, align='center')
+                                    ax.set_yticks(y_pos)
+                                    ax.set_yticklabels(confounders)
+                                    ax.invert_yaxis()
+                                    ax.set_title("Feature Importance for Heterogeneity (Built-in)")
+                                    st.pyplot(fig)
+                                    plt.close(fig)
 
                         # --- Universal HTE Summary ---
                         st.markdown("**Effect Modification**")

@@ -1866,3 +1866,588 @@ def run_causalpy_synthetic_control(df, date_col, geo_col, kpi_col, treated_geo,
 
     except Exception as e:
         return {"error": f"CausalPy Synthetic Control failed: {e}"}
+
+
+# =============================================================================
+# Phase 2: Data Intelligence Backend Utilities
+# =============================================================================
+
+def profile_dataset(df):
+    """
+    Smart data profiling: detects data structure, auto-identifies key columns,
+    and recommends appropriate causal methods.
+    """
+    result = {
+        "shape": {"rows": len(df), "cols": len(df.columns)},
+        "columns": {},
+        "data_type": "unknown",
+        "detected_roles": {},
+        "recommended_methods": [],
+    }
+    
+    date_cols = []
+    geo_cols = []
+    treatment_cols = []
+    outcome_cols = []
+    
+    for col in df.columns:
+        col_info = {
+            "dtype": str(df[col].dtype),
+            "missing": int(df[col].isnull().sum()),
+            "missing_pct": float(df[col].isnull().mean() * 100),
+            "unique": int(df[col].nunique()),
+        }
+        
+        if pd.api.types.is_numeric_dtype(df[col]):
+            desc = df[col].describe()
+            col_info["stats"] = {
+                "mean": float(desc.get("mean", 0)),
+                "std": float(desc.get("std", 0)),
+                "min": float(desc.get("min", 0)),
+                "max": float(desc.get("max", 0)),
+            }
+        
+        result["columns"][col] = col_info
+        
+        # Column role detection heuristics
+        col_lower = col.lower()
+        
+        # Date detection
+        if pd.api.types.is_datetime64_any_dtype(df[col]) or \
+           any(kw in col_lower for kw in ["date", "time", "day", "month", "year", "week"]):
+            date_cols.append(col)
+        
+        # Geo detection
+        if any(kw in col_lower for kw in ["geo", "region", "location", "market", "city", "state", "dma", "country"]):
+            geo_cols.append(col)
+        
+        # Treatment detection
+        if any(kw in col_lower for kw in ["treatment", "treated", "campaign", "intervention", "exposed", "group"]):
+            if df[col].nunique() <= 5:
+                treatment_cols.append(col)
+        elif pd.api.types.is_numeric_dtype(df[col]) and df[col].nunique() == 2 and set(df[col].dropna().unique()).issubset({0, 1}):
+            treatment_cols.append(col)
+        
+        # Outcome detection
+        if any(kw in col_lower for kw in ["kpi", "revenue", "sales", "conversion", "outcome", "value", "metric", "y_obs", "response"]):
+            if pd.api.types.is_numeric_dtype(df[col]):
+                outcome_cols.append(col)
+    
+    result["detected_roles"] = {
+        "date": date_cols,
+        "geography": geo_cols,
+        "treatment": treatment_cols,
+        "outcome": outcome_cols,
+    }
+    
+    # Data type detection
+    has_date = len(date_cols) > 0
+    has_geo = len(geo_cols) > 0
+    
+    if has_date and has_geo:
+        result["data_type"] = "panel"
+        result["recommended_methods"] = ["CausalPy (Bayesian SC)", "GeoLift", "BSTS (CausalImpact)", "DiD"]
+    elif has_date and not has_geo:
+        result["data_type"] = "time_series"
+        result["recommended_methods"] = ["BSTS (CausalImpact)", "DiD"]
+    else:
+        result["data_type"] = "cross_sectional"
+        result["recommended_methods"] = ["PSM", "IPTW", "LinearDML", "CausalForestDML", "S-Learner", "T-Learner", "OLS"]
+    
+    return result
+
+
+def run_data_quality_checks(df, date_col=None, geo_col=None, outcome_col=None, treatment_col=None):
+    """
+    Comprehensive data quality scan. Returns issues and recommended fixes.
+    """
+    issues = []
+    
+    # 1. Missing values
+    for col in df.columns:
+        missing_count = df[col].isnull().sum()
+        missing_pct = df[col].isnull().mean() * 100
+        if missing_pct > 0:
+            severity = "critical" if missing_pct > 30 else "high" if missing_pct > 10 else "medium" if missing_pct > 1 else "low"
+            if pd.api.types.is_numeric_dtype(df[col]):
+                fix = "impute_median"
+                fix_params = {"col": col, "method": "median"}
+            else:
+                fix = "impute_mode"
+                fix_params = {"col": col, "method": "mode"}
+            issues.append({
+                "issue": f"{missing_pct:.1f}% missing in '{col}' ({missing_count} rows)",
+                "severity": severity,
+                "category": "missing_values",
+                "suggested_fix": fix,
+                "fix_params": fix_params,
+            })
+    
+    # 2. Outliers (numeric columns, IQR method)
+    for col in df.select_dtypes(include=[np.number]).columns:
+        if df[col].nunique() <= 2:
+            continue
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+        if IQR > 0:
+            outlier_mask = (df[col] < Q1 - 3 * IQR) | (df[col] > Q3 + 3 * IQR)
+            outlier_count = outlier_mask.sum()
+            if outlier_count > 0:
+                outlier_pct = outlier_count / len(df) * 100
+                severity = "high" if outlier_pct > 5 else "medium"
+                issues.append({
+                    "issue": f"{outlier_count} outliers in '{col}' ({outlier_pct:.1f}%, >3×IQR)",
+                    "severity": severity,
+                    "category": "outliers",
+                    "suggested_fix": "winsorize",
+                    "fix_params": {"col": col, "percentile": 0.95},
+                })
+    
+    # 3. Treatment imbalance
+    if treatment_col and treatment_col in df.columns:
+        val_counts = df[treatment_col].value_counts(normalize=True)
+        if len(val_counts) == 2:
+            minority_pct = val_counts.min() * 100
+            if minority_pct < 10:
+                issues.append({
+                    "issue": f"Treatment imbalance in '{treatment_col}': minority group is {minority_pct:.1f}%",
+                    "severity": "high",
+                    "category": "class_imbalance",
+                    "suggested_fix": "note_only",
+                    "fix_params": {"col": treatment_col, "minority_pct": minority_pct},
+                })
+    
+    # 4. Duplicates
+    dup_count = df.duplicated().sum()
+    if dup_count > 0:
+        issues.append({
+            "issue": f"{dup_count} duplicate rows ({dup_count/len(df)*100:.1f}%)",
+            "severity": "medium",
+            "category": "duplicates",
+            "suggested_fix": "drop_duplicates",
+            "fix_params": {},
+        })
+    
+    # 5. Near-zero variance
+    for col in df.select_dtypes(include=[np.number]).columns:
+        if df[col].std() < 1e-10 and df[col].nunique() <= 1:
+            issues.append({
+                "issue": f"Near-zero variance in '{col}' (constant column)",
+                "severity": "low",
+                "category": "low_variance",
+                "suggested_fix": "drop_column",
+                "fix_params": {"col": col},
+            })
+    
+    # 6. Temporal gaps (if date_col provided)
+    if date_col and date_col in df.columns:
+        try:
+            dates = pd.to_datetime(df[date_col])
+            date_range = pd.date_range(dates.min(), dates.max())
+            unique_dates = dates.dt.date.nunique()
+            expected_dates = len(date_range)
+            if unique_dates < expected_dates * 0.9:
+                missing_dates = expected_dates - unique_dates
+                issues.append({
+                    "issue": f"{missing_dates} missing dates in time series ({date_col})",
+                    "severity": "medium",
+                    "category": "temporal_gaps",
+                    "suggested_fix": "note_only",
+                    "fix_params": {"col": date_col, "missing_count": missing_dates},
+                })
+        except Exception:
+            pass
+    
+    # 7. Geo coverage (if geo_col provided)
+    if geo_col and geo_col in df.columns:
+        obs_per_geo = df.groupby(geo_col).size()
+        min_obs = obs_per_geo.min()
+        if min_obs < 30:
+            sparse_geos = obs_per_geo[obs_per_geo < 30].index.tolist()
+            issues.append({
+                "issue": f"{len(sparse_geos)} regions with <30 observations (min={min_obs})",
+                "severity": "medium",
+                "category": "geo_coverage",
+                "suggested_fix": "note_only",
+                "fix_params": {"col": geo_col, "sparse_regions": sparse_geos[:5]},
+            })
+    
+    # Sort by severity
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    issues.sort(key=lambda x: severity_order.get(x["severity"], 4))
+    
+    return {"issues": issues, "total_issues": len(issues)}
+
+
+def apply_fixes(df, fixes):
+    """
+    Applies a list of approved data quality fixes to the dataframe.
+    Returns the modified dataframe and a summary of changes.
+    """
+    changes = []
+    df_fixed = df.copy()
+    
+    for fix in fixes:
+        fix_type = fix.get("fix_type") or fix.get("suggested_fix")
+        col = fix.get("col") or fix.get("fix_params", {}).get("col")
+        params = fix.get("params") or fix.get("fix_params", {})
+        
+        try:
+            if fix_type in ("impute_median", "impute_mean", "impute_mode"):
+                method = fix_type.split("_")[1]
+                if method == "median":
+                    fill_val = df_fixed[col].median()
+                elif method == "mean":
+                    fill_val = df_fixed[col].mean()
+                else:
+                    fill_val = df_fixed[col].mode().iloc[0]
+                before_missing = df_fixed[col].isnull().sum()
+                df_fixed[col] = df_fixed[col].fillna(fill_val)
+                changes.append(f"Imputed {before_missing} missing values in '{col}' with {method} ({fill_val:.4f})")
+            
+            elif fix_type == "winsorize":
+                from scipy.stats import mstats
+                pct = params.get("percentile", 0.95)
+                before_min, before_max = df_fixed[col].min(), df_fixed[col].max()
+                df_fixed[col] = mstats.winsorize(df_fixed[col].values, limits=[1-pct, 1-pct])
+                changes.append(f"Winsorized '{col}' at {pct:.0%} (range: {before_min:.2f}-{before_max:.2f} → {df_fixed[col].min():.2f}-{df_fixed[col].max():.2f})")
+            
+            elif fix_type == "drop_duplicates":
+                before_rows = len(df_fixed)
+                df_fixed = df_fixed.drop_duplicates()
+                changes.append(f"Removed {before_rows - len(df_fixed)} duplicate rows")
+            
+            elif fix_type == "drop_column":
+                df_fixed = df_fixed.drop(columns=[col])
+                changes.append(f"Dropped column '{col}'")
+            
+            elif fix_type == "remove_outliers":
+                method = params.get("method", "iqr")
+                if method == "iqr":
+                    Q1 = df_fixed[col].quantile(0.25)
+                    Q3 = df_fixed[col].quantile(0.75)
+                    IQR = Q3 - Q1
+                    mask = (df_fixed[col] >= Q1 - 3*IQR) & (df_fixed[col] <= Q3 + 3*IQR)
+                    removed = (~mask).sum()
+                    df_fixed = df_fixed[mask]
+                    changes.append(f"Removed {removed} outliers from '{col}' (IQR method)")
+            
+            else:
+                changes.append(f"Skipped unknown fix type: {fix_type}")
+        
+        except Exception as e:
+            changes.append(f"Failed to apply {fix_type} on '{col}': {e}")
+    
+    return df_fixed, changes
+
+
+def check_parallel_trends(df, outcome_col, treatment_col, time_col):
+    """Pre-trend test for DiD: regreses outcome on treatment*time in pre-period."""
+    try:
+        pre_data = df[df[time_col] == 0] if df[time_col].nunique() == 2 else df
+        if len(pre_data) < 10:
+            return {"pass": None, "message": "Insufficient data for parallel trends test"}
+        
+        X = sm.add_constant(pre_data[[treatment_col, time_col]])
+        X["interaction"] = pre_data[treatment_col] * pre_data[time_col]
+        y = pre_data[outcome_col]
+        model = sm.OLS(y, X).fit()
+        
+        interaction_pval = model.pvalues.get("interaction", 1.0)
+        return {
+            "pass": interaction_pval > 0.05,
+            "p_value": float(interaction_pval),
+            "coefficient": float(model.params.get("interaction", 0)),
+            "message": "Parallel trends assumption holds (p > 0.05)" if interaction_pval > 0.05 
+                       else f"Parallel trends may be violated (p = {interaction_pval:.4f})"
+        }
+    except Exception as e:
+        return {"pass": None, "message": f"Parallel trends test failed: {e}"}
+
+
+def check_pre_period_fit(df, date_col, outcome_col, intervention_date, geo_col=None, treated_geo=None):
+    """Assess pre-period model fit quality (MAPE) for BSTS/Synthetic Control."""
+    try:
+        df_copy = df.copy()
+        df_copy[date_col] = pd.to_datetime(df_copy[date_col])
+        intervention_dt = pd.to_datetime(intervention_date)
+        
+        pre_data = df_copy[df_copy[date_col] < intervention_dt]
+        
+        if treated_geo and geo_col:
+            treated_pre = pre_data[pre_data[geo_col] == treated_geo][outcome_col]
+            control_pre = pre_data[pre_data[geo_col] != treated_geo].groupby(date_col)[outcome_col].mean()
+        else:
+            treated_pre = pre_data[outcome_col]
+            control_pre = None
+        
+        n_pre = len(treated_pre)
+        result = {
+            "n_pre_periods": n_pre,
+            "pre_period_mean": float(treated_pre.mean()) if len(treated_pre) > 0 else None,
+            "pre_period_std": float(treated_pre.std()) if len(treated_pre) > 0 else None,
+        }
+        
+        if n_pre < 30:
+            result["warning"] = f"Only {n_pre} pre-period observations. Consider at least 30 for reliable estimates."
+        
+        return result
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def check_covariate_balance(df, treatment_col, covariates):
+    """Standardized Mean Differences (SMD) for PSM/IPTW balance checks."""
+    try:
+        treated = df[df[treatment_col] == 1]
+        control = df[df[treatment_col] == 0]
+        
+        balance = []
+        for cov in covariates:
+            if not pd.api.types.is_numeric_dtype(df[cov]):
+                continue
+            mean_t = treated[cov].mean()
+            mean_c = control[cov].mean()
+            std_pooled = np.sqrt((treated[cov].var() + control[cov].var()) / 2)
+            smd = (mean_t - mean_c) / std_pooled if std_pooled > 0 else 0
+            
+            balance.append({
+                "covariate": cov,
+                "mean_treated": float(mean_t),
+                "mean_control": float(mean_c),
+                "smd": float(abs(smd)),
+                "balanced": abs(smd) < 0.1,
+            })
+        
+        all_balanced = all(b["balanced"] for b in balance) if balance else False
+        return {
+            "balance": balance,
+            "all_balanced": all_balanced,
+            "message": "All covariates balanced (|SMD| < 0.1)" if all_balanced 
+                       else "Some covariates are imbalanced (|SMD| ≥ 0.1)"
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def check_power_requirements(df, data_type, date_col=None, geo_col=None, treatment_col=None, intervention_date=None):
+    """
+    Checks if the dataset has sufficient power for causal analysis.
+    """
+    checks = []
+    
+    if data_type == "panel" and geo_col:
+        n_geos = df[geo_col].nunique()
+        checks.append({
+            "check": "Number of regions",
+            "status": "pass" if n_geos >= 6 else "warn" if n_geos >= 3 else "fail",
+            "detail": f"{n_geos} regions (need ≥5 donors + 1 treated for synthetic control)"
+        })
+        
+        if date_col:
+            n_dates = df[date_col].nunique()
+            checks.append({
+                "check": "Time periods",
+                "status": "pass" if n_dates >= 60 else "warn" if n_dates >= 30 else "fail",
+                "detail": f"{n_dates} time periods"
+            })
+
+    elif data_type == "time_series" and date_col:
+        if intervention_date:
+            try:
+                df_copy = df.copy()
+                df_copy[date_col] = pd.to_datetime(df_copy[date_col])
+                intervention_dt = pd.to_datetime(intervention_date)
+                pre_n = len(df_copy[df_copy[date_col] < intervention_dt])
+                post_n = len(df_copy[df_copy[date_col] >= intervention_dt])
+                checks.append({
+                    "check": "Pre-period length",
+                    "status": "pass" if pre_n >= 2 * post_n else "warn",
+                    "detail": f"{pre_n} pre-period vs {post_n} post-period points (ideal: pre ≥ 2× post)"
+                })
+            except Exception:
+                pass
+
+    elif data_type == "cross_sectional" and treatment_col:
+        n_treated = int((df[treatment_col] == 1).sum())
+        n_control = int((df[treatment_col] == 0).sum())
+        checks.append({
+            "check": "Sample sizes",
+            "status": "pass" if min(n_treated, n_control) >= 30 else "warn" if min(n_treated, n_control) >= 10 else "fail",
+            "detail": f"Treated: {n_treated}, Control: {n_control}"
+        })
+        
+        prevalence = n_treated / (n_treated + n_control) * 100 if (n_treated + n_control) > 0 else 0
+        checks.append({
+            "check": "Treatment prevalence",
+            "status": "pass" if 5 <= prevalence <= 95 else "warn",
+            "detail": f"Treatment prevalence: {prevalence:.1f}%"
+        })
+
+    return {"data_type": data_type, "checks": checks}
+
+
+# =============================================================================
+# Phase 3: Robustness & Sensitivity Backend
+# =============================================================================
+
+def run_placebo_test(df, method, date_col, outcome_col, intervention_date,
+                     geo_col=None, treated_geo=None, treatment_duration=60,
+                     placebo_shift_days=None):
+    """
+    Placebo test: Shifts intervention to pre-period. If significant effect found,
+    the original result may be spurious.
+    """
+    try:
+        df_copy = df.copy()
+        df_copy[date_col] = pd.to_datetime(df_copy[date_col])
+        intervention_dt = pd.to_datetime(intervention_date)
+        
+        # Default: shift to midpoint of pre-period
+        if placebo_shift_days is None:
+            min_date = df_copy[date_col].min()
+            pre_period_days = (intervention_dt - min_date).days
+            placebo_shift_days = pre_period_days // 2
+        
+        placebo_date = intervention_dt - pd.Timedelta(days=placebo_shift_days)
+        placebo_date_str = placebo_date.strftime('%Y-%m-%d')
+        
+        # Run analysis with placebo date on pre-period data only
+        pre_data = df_copy[df_copy[date_col] < intervention_dt]
+        
+        if method in ("BSTS", "CausalImpact"):
+            res = run_causal_impact_analysis(
+                pre_data, date_col, outcome_col, placebo_date_str,
+                unit_col=geo_col, treated_unit=treated_geo, use_panel=bool(geo_col)
+            )
+        elif method in ("CausalPy", "SyntheticControl"):
+            res = run_causalpy_synthetic_control(
+                pre_data, date_col, geo_col, outcome_col, treated_geo,
+                placebo_date_str, treatment_duration=treatment_duration
+            )
+        else:
+            return {"error": f"Placebo test not supported for method: {method}"}
+        
+        if 'error' in res:
+            return {"pass": None, "message": f"Placebo test failed to run: {res['error']}"}
+        
+        # Check if placebo found a significant effect
+        p_value = res.get('p_value') or res.get('metrics', {}).get('prob_effect', 0)
+        is_significant = False
+        if method in ("BSTS", "CausalImpact"):
+            is_significant = isinstance(p_value, (int, float)) and p_value < 0.05
+        else:
+            is_significant = isinstance(p_value, (int, float)) and p_value > 0.95
+        
+        return {
+            "pass": not is_significant,
+            "placebo_date": placebo_date_str,
+            "placebo_significant": is_significant,
+            "placebo_p_value": float(p_value) if isinstance(p_value, (int, float)) else None,
+            "message": "Placebo test passed (no significant effect at placebo date)" if not is_significant
+                       else "⚠️ Placebo test FAILED — effect found at placebo date, original results may be spurious"
+        }
+    except Exception as e:
+        return {"pass": None, "message": f"Placebo test error: {e}"}
+
+
+def run_leave_one_out(df, method, date_col, outcome_col, geo_col, treated_geo,
+                      intervention_date, treatment_duration=60):
+    """
+    Leave-one-out: Iteratively drops each donor region and re-runs analysis.
+    Checks stability of treatment effect estimate.
+    """
+    try:
+        all_geos = df[geo_col].unique().tolist()
+        donor_geos = [g for g in all_geos if g != treated_geo]
+        
+        if len(donor_geos) < 3:
+            return {"pass": None, "message": "Not enough donor regions for leave-one-out (need ≥3)"}
+        
+        results = {}
+        for dropped_geo in donor_geos[:8]:  # Limit to 8 iterations for performance
+            df_subset = df[df[geo_col] != dropped_geo]
+            try:
+                if method in ("CausalPy", "SyntheticControl"):
+                    res = run_causalpy_synthetic_control(
+                        df_subset, date_col, geo_col, outcome_col, treated_geo,
+                        intervention_date, treatment_duration=treatment_duration
+                    )
+                    if 'error' not in res:
+                        results[dropped_geo] = res.get('metrics', {}).get('avg_effect')
+                elif method in ("BSTS", "CausalImpact"):
+                    res = run_causal_impact_analysis(
+                        df_subset, date_col, outcome_col, intervention_date,
+                        unit_col=geo_col, treated_unit=treated_geo, use_panel=True
+                    )
+                    if 'error' not in res:
+                        results[dropped_geo] = res.get('ate')
+            except Exception:
+                continue
+        
+        if len(results) < 2:
+            return {"pass": None, "message": "Too few leave-one-out iterations succeeded"}
+        
+        effects = [v for v in results.values() if v is not None]
+        mean_effect = np.mean(effects)
+        std_effect = np.std(effects)
+        cv = abs(std_effect / mean_effect) if mean_effect != 0 else float('inf')
+        
+        is_stable = cv < 0.3  # Coefficient of variation < 30%
+        
+        return {
+            "pass": is_stable,
+            "iterations": len(results),
+            "results": {str(k): float(v) for k, v in results.items() if v is not None},
+            "mean_effect": float(mean_effect),
+            "std_effect": float(std_effect),
+            "cv": float(cv),
+            "message": f"Leave-one-out test {'passed' if is_stable else 'FAILED'} (CV={cv:.2%}, {len(results)} iterations)"
+        }
+    except Exception as e:
+        return {"pass": None, "message": f"Leave-one-out error: {e}"}
+
+
+def generate_report_content(session_state):
+    """
+    Compiles all session analyses into structured report sections.
+    """
+    sections = {}
+    
+    # 1. Dataset info
+    if hasattr(session_state, 'df') and session_state.df is not None:
+        df = session_state.df
+        sections['data'] = {
+            'shape': f"{len(df)} rows × {len(df.columns)} columns",
+            'columns': list(df.columns),
+            'sim_type': getattr(session_state, 'sim_type', 'Unknown'),
+            'description': getattr(session_state, 'dataset_description', ''),
+        }
+    
+    # 2. Preprocessing
+    preprocessing = []
+    if getattr(session_state, 'p_impute_enable', False):
+        preprocessing.append("Missing value imputation enabled")
+    if getattr(session_state, 'p_wins_enable', False):
+        preprocessing.append("Winsorization enabled")
+    if getattr(session_state, 'p_log_transform_cols', None):
+        preprocessing.append(f"Log transform: {session_state.p_log_transform_cols}")
+    if getattr(session_state, 'p_standardize_cols', None):
+        preprocessing.append(f"Standardization: {session_state.p_standardize_cols}")
+    sections['preprocessing'] = preprocessing
+    
+    # 3. Analyses run
+    analyses = []
+    if getattr(session_state, 'quasi_results', None):
+        for key, result in session_state.quasi_results.items():
+            analyses.append({'type': 'Quasi-Experimental', 'method': key, 'result': result})
+    if getattr(session_state, 'obs_results', None):
+        for key, result in session_state.obs_results.items():
+            analyses.append({'type': 'Observational', 'method': key, 'result': result})
+    sections['analyses'] = analyses
+    
+    # 4. Quality summary
+    sections['quality_summary'] = getattr(session_state, 'data_quality_summary', None)
+    
+    return sections
