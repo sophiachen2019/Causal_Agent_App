@@ -2380,7 +2380,7 @@ with tab_guide:
         # Display History Table
         with st.expander("See Full History"):
             history_df = pd.DataFrame(history)
-            st.table(history_df)
+            st.dataframe(history_df, hide_index=True, use_container_width=True)
     else:
         st.warning("No version history found.")
 
