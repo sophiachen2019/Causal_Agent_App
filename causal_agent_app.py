@@ -1220,13 +1220,10 @@ with tab_eda:
             fig = px.histogram(data, x=x, color=color, barmode=bar_mode, title=f"Histogram of {x} {title_suffix}")
             st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Box Plot":
-            if color:
-                fig = px.box(data, x=color, y=y[0] if y else x, color=color, title=f"Box Plot {title_suffix}")
+            if y and len(y) > 0:
+                fig = px.box(data, x=x, y=y[0], color=color, title=f"Box Plot {title_suffix}")
             else:
-                if y and len(y) > 0:
-                    fig = px.box(data, y=y, title=f"Box Plot {title_suffix}")
-                else:
-                    fig = px.box(data, y=x, title=f"Box Plot {title_suffix}")
+                fig = px.box(data, y=x, color=color, title=f"Box Plot {title_suffix}")
             st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Pie Chart":
             if color:
