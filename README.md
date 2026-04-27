@@ -70,7 +70,8 @@ Navigate through the tabs:
 
 ## 📝 Version History
 
-- **v5.2.0 (Latest)**: Extended CausalPy (Bayesian Synthetic Control) with covariate support, Advanced PyMC Sampling Parameter tuning, and proper manual `posterior_predictive` metric sampling; added Bar Mode toggle (Stacked/Grouped) to Chart Builder; refined AI Configuration Guide consistency; resolved `zoo` and `arviz==0.21.0` dependency breakage on Streamlit Community Cloud.
+- **v5.3.0 (Latest)**: Implemented 7-method targeted Data Quality Readiness framework algorithm; migrated Chart Builder (Histogram, Box Plot, Pie, Dual Axis) entirely to Plotly interactive graph objects.
+- **v5.2.0**: Extended CausalPy (Bayesian Synthetic Control) with covariate support, Advanced PyMC Sampling Parameter tuning, and proper manual `posterior_predictive` metric sampling; added Bar Mode toggle (Stacked/Grouped) to Chart Builder; refined AI Configuration Guide consistency; resolved `zoo` and `arviz==0.21.0` dependency breakage on Streamlit Community Cloud.
 - **v5.1.0**: Added CausalPy (Bayesian Synthetic Control) as pure-Python alternative to GeoLift; updated User Guide and AI knowledge base.
 - **v5.0.0**: Added data quality simulation engine (Low/Medium/High) and interactive AI-assistant experience for data exploration and causal analysis; advanced data preprocessing (Conditional Override, Resampling); backend API rate limiting; dataset download.
 - **v4.5.0**: Restructured synthetic control and temporal causality modules to dynamically ingest multiple covariates, documented rigorous 95% Confidence Intervals for all metrics, and migrated core plots to Plotly Express.
