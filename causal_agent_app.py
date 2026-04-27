@@ -2385,8 +2385,8 @@ with tab_guide:
                 hide_index=True, 
                 use_container_width=True,
                 column_config={
-                    "Version": st.column_config.Column(width="small"),
-                    "Release Date": st.column_config.Column(width="small")
+                    "Version": st.column_config.Column(width=60),
+                    "Release Date": st.column_config.Column(width=90)
                 }
             )
     else:
