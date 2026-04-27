@@ -6,6 +6,8 @@ from sklearn.preprocessing import StandardScaler
 from econml.dml import LinearDML, CausalForestDML
 import matplotlib.pyplot as plt
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from dowhy import CausalModel
 from scipy import stats
 import statsmodels.api as sm
@@ -1159,12 +1161,11 @@ with tab_eda:
                  data = data.copy()
                  data[color] = data[color].astype(str)
 
-        # Dual Axis Plotting (Matplotlib)
+        # Dual Axis Plotting (Plotly Graph Objects)
         if use_dual_axis and y and len(y) > 1:
             # Check for duplicates in X and aggregate if needed for line plot
             if data[x].duplicated().any():
                 st.warning(f"Data contains duplicate values for X-axis ({x}). Aggregating by mean for Dual Axis chart.")
-                # Select only numeric columns + X for aggregation to avoid errors
                 numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
                 cols_to_agg = list(set(numeric_cols + y)) 
                 # Ensure X is preserved if it's not the index
@@ -1176,46 +1177,34 @@ with tab_eda:
             else:
                 data_sorted = data.sort_values(by=x)
 
-            fig, ax1 = plt.subplots(figsize=(10, 6))
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
             
             # Identify Left vs Right vars
             left_vars = [v for v in y if v not in right_y_vars]
             right_vars = [v for v in y if v in right_y_vars]
             
             # Plot Left Axis
-            if left_vars:
-                # Use a color cycle or distinct colors
-                colors = plt.cm.tab10(np.linspace(0, 1, len(left_vars) + len(right_vars)))
-                
-                for i, col in enumerate(left_vars):
-                    ax1.plot(data_sorted[x], data_sorted[col], label=f"{col} (Left)", marker='o', color=colors[i])
+            for col in left_vars:
+                fig.add_trace(
+                    go.Scatter(x=data_sorted[x], y=data_sorted[col], name=f"{col} (Left)", mode='lines+markers'),
+                    secondary_y=False,
+                )
             
-            ax1.set_xlabel(x)
-            ax1.set_ylabel(", ".join(left_vars))
-            ax1.tick_params(axis='y')
-            # Combine legends later or put separately
-            lines1, labels1 = ax1.get_legend_handles_labels()
-
             # Plot Right Axis
-            lines2, labels2 = [], []
+            for col in right_vars:
+                fig.add_trace(
+                    go.Scatter(x=data_sorted[x], y=data_sorted[col], name=f"{col} (Right)", mode='lines', line=dict(dash='dash')),
+                    secondary_y=True,
+                )
+            
+            fig.update_layout(title_text=f"Dual Axis Chart {title_suffix}")
+            fig.update_xaxes(title_text=x)
+            if left_vars:
+                fig.update_yaxes(title_text=", ".join(left_vars), secondary_y=False)
             if right_vars:
-                ax2 = ax1.twinx()
-                for i, col in enumerate(right_vars):
-                     # Offset color index
-                     color_idx = len(left_vars) + i
-                     if color_idx >= len(colors): color_idx = i % len(colors)
-                     
-                     ax2.plot(data_sorted[x], data_sorted[col], label=f"{col} (Right)", linestyle='--', alpha=0.7, color=colors[color_idx])
+                fig.update_yaxes(title_text=", ".join(right_vars), secondary_y=True)
                 
-                ax2.set_ylabel(", ".join(right_vars))
-                ax2.tick_params(axis='y')
-                lines2, labels2 = ax2.get_legend_handles_labels()
-            
-            # Unified Legend
-            ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-            
-            plt.title(f"Dual Axis Chart {title_suffix}")
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True)
             return
 
         if chart_type == "Scatter Plot":
@@ -1228,48 +1217,27 @@ with tab_eda:
             fig = px.bar(data, x=x, y=y, color=color, barmode=bar_mode, title=f"Bar Chart {title_suffix}")
             st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Histogram":
-            fig, ax = plt.subplots()
-            if color:
-                for label, group in data.groupby(color):
-                    ax.hist(group[x], alpha=0.5, label=str(label), bins=20)
-                ax.legend()
-            else:
-                ax.hist(data[x], bins=20)
-            ax.set_title(f"Histogram of {x} {title_suffix}")
-            st.pyplot(fig)
+            fig = px.histogram(data, x=x, color=color, barmode=bar_mode, title=f"Histogram of {x} {title_suffix}")
+            st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Box Plot":
-            fig, ax = plt.subplots()
             if color:
-                # Boxplot with grouping
-                box_data = []
-                labels = []
-                for label, group in data.groupby(color):
-                    if y:
-                         # Use first Y for boxplot if multiple?
-                         box_data.append(group[y[0]])
-                    else:
-                         box_data.append(group[x]) 
-                    labels.append(label)
-                ax.boxplot(box_data, labels=labels)
+                fig = px.box(data, x=color, y=y[0] if y else x, color=color, title=f"Box Plot {title_suffix}")
             else:
-                if y:
-                     # Multiple boxplots for multiple Ys
-                     box_data = [data[col] for col in y]
-                     ax.boxplot(box_data, labels=y)
+                if y and len(y) > 0:
+                    fig = px.box(data, y=y, title=f"Box Plot {title_suffix}")
                 else:
-                    ax.boxplot(data[x])
-            ax.set_title(f"Box Plot {title_suffix}")
-            st.pyplot(fig)
+                    fig = px.box(data, y=x, title=f"Box Plot {title_suffix}")
+            st.plotly_chart(fig, use_container_width=True)
         elif chart_type == "Pie Chart":
-            fig, ax = plt.subplots()
             if color:
-                 counts = data[color].value_counts()
-                 ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
+                 counts = data[color].value_counts().reset_index()
+                 counts.columns = [color, 'count']
+                 fig = px.pie(counts, names=color, values='count', title=f"Pie Chart {title_suffix}")
             else:
-                 counts = data[x].value_counts()
-                 ax.pie(counts, labels=counts.index, autopct='%1.1f%%')
-            ax.set_title(f"Pie Chart {title_suffix}")
-            st.pyplot(fig)
+                 counts = data[x].value_counts().reset_index()
+                 counts.columns = [x, 'count']
+                 fig = px.pie(counts, names=x, values='count', title=f"Pie Chart {title_suffix}")
+            st.plotly_chart(fig, use_container_width=True)
 
     if facet_col:
         # Get unique values and sort
