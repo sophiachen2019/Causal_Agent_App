@@ -624,16 +624,24 @@ with tab_eda:
             
             st.divider()
             
-            st.markdown("### 🎯 Define Your Objective")
-            st.write("Based on the AI Dataset preview, please select the specific metrics you want to evaluate. These selections will intelligently configure your subsequent analysis.")
+            st.markdown("### 🎯 Define Your Objective (Global Analysis Setup)")
+            st.write("Based on the AI Dataset preview, define your experiment geography. These selections will intelligently configure your subsequent analysis.")
+            
+            global_analysis_type = st.radio(
+                "1. Select Analysis Paradigm", 
+                ["🔍 Observational (Cross-Sectional)", "📈 Quasi-Experimental (Time Series / Panel)"],
+                horizontal=True,
+                key="global_analysis_type"
+            )
             
             col_obj1, col_obj2 = st.columns(2)
             with col_obj1:
                 target_var = st.selectbox("🎯 Target Variable (Outcome / KPI)", df.columns, key="global_target")
             with col_obj2:
-                treatment_var = st.selectbox("💊 Treatment Variable (Intervention)", df.columns, key="global_treatment")
+                treatment_opts = ["None (Location/Time Event space)"] + list(df.columns) if "Quasi-Experimental" in global_analysis_type else list(df.columns)
+                treatment_var = st.selectbox("💊 Treatment Variable (Intervention)", treatment_opts, key="global_treatment")
                 
-            if target_var and treatment_var and target_var != treatment_var:
+            if target_var and (treatment_var != target_var):
                 if st.button("🧠 Recommend Optimal Causal Method", key="ai_method_btn"):
                     if not check_api_limit():
                         st.stop()
@@ -1285,10 +1293,12 @@ with tab_config:
     st.header("Analysis Configuration")
     
     # Analysis Type Selector
+    _default_type = 1 if "Quasi-Experimental" in st.session_state.get('global_analysis_type', "") else 0
     analysis_type = st.radio(
         "Analysis Type",
         ["🔍 Observational (Cross-Sectional)", "📈 Quasi-Experimental (Time Series / Panel)"],
         horizontal=True,
+        index=_default_type,
         help="Observational: one-time snapshot data. Quasi-Experimental: data with time/region dimensions."
     )
     
