@@ -624,33 +624,22 @@ with tab_eda:
             
             st.divider()
             
-            st.markdown("### 🎯 Define Your Objective (Global Analysis Setup)")
-            st.write("Based on the AI Dataset preview, define your experiment geography. These selections will intelligently configure your subsequent analysis.")
-            
-            global_analysis_type = st.radio(
-                "1. Select Analysis Paradigm", 
-                ["🔍 Observational (Cross-Sectional)", "📈 Quasi-Experimental (Time Series / Panel)"],
-                horizontal=True,
-                key="global_analysis_type"
-            )
-            
-            col_obj1, col_obj2 = st.columns(2)
-            with col_obj1:
-                target_var = st.selectbox("🎯 Target Variable (Outcome / KPI)", df.columns, key="global_target")
-            with col_obj2:
-                treatment_opts = ["None (Location/Time Event space)"] + list(df.columns) if "Quasi-Experimental" in global_analysis_type else list(df.columns)
-                treatment_var = st.selectbox("💊 Treatment Variable (Intervention)", treatment_opts, key="global_treatment")
+            with st.expander("🎯 Define Your Global Objective (Optional)", expanded=False):
+                st.write("These selections allow us to intelligently pre-fill downstream configuration tabs. **You can safely skip this if you aren't sure yet!**")
                 
-            if target_var and (treatment_var != target_var):
-                if st.button("🧠 Recommend Optimal Causal Method", key="ai_method_btn"):
-                    if not check_api_limit():
-                        st.stop()
-                    with st.spinner("AI is determining the optimal causal method based on your target setup..."):
-                        method_rec = data_generation_utils.generate_method_recommendation(df, target_var, treatment_var, chatbot_utils.get_api_key())
-                        st.session_state.ai_method_recommendation = method_rec
+                global_analysis_type = st.radio(
+                    "1. Select Analysis Paradigm", 
+                    ["🔍 Observational (Cross-Sectional)", "📈 Quasi-Experimental (Time Series / Panel)"],
+                    horizontal=True,
+                    key="global_analysis_type"
+                )
                 
-            if st.session_state.get('ai_method_recommendation'):
-                st.info(st.session_state.ai_method_recommendation)
+                col_obj1, col_obj2 = st.columns(2)
+                with col_obj1:
+                    target_var = st.selectbox("2. Target Variable (Outcome / KPI)", df.columns, key="global_target")
+                with col_obj2:
+                    treatment_opts = ["None (Location/Time Event space)"] + list(df.columns) if "Quasi-Experimental" in global_analysis_type else list(df.columns)
+                    treatment_var = st.selectbox("3. Treatment Variable (Intervention)", treatment_opts, key="global_treatment")
         else:
             if st.button("🧠 Generate AI Dataset Summary", key="ai_preview_btn"):
                 if not check_api_limit():
@@ -1314,7 +1303,9 @@ with tab_config:
                 if not check_api_limit():
                     st.stop()
                 with st.spinner("AI is analyzing your data..."):
-                    rec = data_generation_utils.generate_method_recommendation(df, chatbot_utils.get_api_key(), tab_type=_tab_type)
+                    t_var = st.session_state.get('global_target', 'Undefined')
+                    x_var = st.session_state.get('global_treatment', 'Undefined')
+                    rec = data_generation_utils.generate_method_recommendation(df, t_var, x_var, chatbot_utils.get_api_key())
                     st.session_state.config_method_rec = rec
         if st.session_state.get('config_method_rec'):
             st.info(st.session_state.config_method_rec)
