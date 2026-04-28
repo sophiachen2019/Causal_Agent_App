@@ -621,6 +621,28 @@ with tab_eda:
                 for i, q in enumerate(questions, 1):
                     desc_text += f"\n{i}. {q}"
             st.info(desc_text)
+            
+            st.divider()
+            
+            st.markdown("### 🎯 Define Your Objective")
+            st.write("Based on the AI Dataset preview, please select the specific metrics you want to evaluate. These selections will intelligently configure your subsequent analysis.")
+            
+            col_obj1, col_obj2 = st.columns(2)
+            with col_obj1:
+                target_var = st.selectbox("🎯 Target Variable (Outcome / KPI)", df.columns, key="global_target")
+            with col_obj2:
+                treatment_var = st.selectbox("💊 Treatment Variable (Intervention)", df.columns, key="global_treatment")
+                
+            if target_var and treatment_var and target_var != treatment_var:
+                if st.button("🧠 Recommend Optimal Causal Method", key="ai_method_btn"):
+                    if not check_api_limit():
+                        st.stop()
+                    with st.spinner("AI is determining the optimal causal method based on your target setup..."):
+                        method_rec = data_generation_utils.generate_method_recommendation(df, target_var, treatment_var, chatbot_utils.get_api_key())
+                        st.session_state.ai_method_recommendation = method_rec
+                
+            if st.session_state.get('ai_method_recommendation'):
+                st.info(st.session_state.ai_method_recommendation)
         else:
             if st.button("🧠 Generate AI Dataset Summary", key="ai_preview_btn"):
                 if not check_api_limit():
@@ -664,28 +686,6 @@ with tab_eda:
                         st.success(f"**🟢 {method} Fully Ready**")
             except Exception as e:
                 st.warning(f"Could not calculate readiness: {e}")
-                
-            st.write("---")
-            
-            st.markdown("### 🎯 Define Your Objective")
-            st.write("Based on the data profile above, please select the specific metrics you want to evaluate. These selections will intelligently configure your subsequent analysis.")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                target_var = st.selectbox("🎯 Target Variable (Outcome / KPI)", df.columns, key="global_target")
-            with col2:
-                treatment_var = st.selectbox("💊 Treatment Variable (Intervention)", df.columns, key="global_treatment")
-                
-            if target_var and treatment_var and target_var != treatment_var:
-                if st.button("🧠 Recommend Optimal Causal Method", key="ai_method_btn"):
-                    if not check_api_limit():
-                        st.stop()
-                    with st.spinner("AI is determining the optimal causal method based on your target setup..."):
-                        method_rec = data_generation_utils.generate_method_recommendation(df, target_var, treatment_var, chatbot_utils.get_api_key())
-                        st.session_state.ai_method_recommendation = method_rec
-                
-            if st.session_state.get('ai_method_recommendation'):
-                st.info(st.session_state.ai_method_recommendation)
                 
             st.write("---")
         with st.expander("Show Summary Statistics", expanded=False):
