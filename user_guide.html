@@ -109,22 +109,19 @@
     <h2>Welcome to the Causal Agent App</h2>
     <p>This application provides an end-to-end, <strong>AI-guided experience</strong> to help you easily estimate causal effects from observational and A/B testing data using advanced statistical methods. You may also receive direct technical support from our dedicated <strong>AI Assistant</strong> within the chat interface.</p>
 
-    <div class="highlight">
-        <h4>1. Data Preparation</h4>
-        <p><strong>Simulated Data:</strong> If you don't have a dataset, select "Simulated Data" to explore the app's features. We provide two distinct default sets (Observational vs Quasi-Experimental). You can also explicitly instruct the AI Assistant to launch the <strong>Data Simulator</strong> to generate heavily customized synthetic datasets modeling specific variables, noise levels, and true causal effect sizes.</p>
-        <p><strong>Upload Data:</strong> Upload your own CSV file. Ensure your data contains:</p>
-        <ul>
-            <li><strong>Treatment Column:</strong> The variable indicating the intervention (e.g., <code>Feature_Adoption</code>, <code>Marketing_Campaign</code>).</li>
-            <li><strong>Outcome Column:</strong> The metric you want to influence (e.g., <code>Account_Value</code>, <code>Conversion_Rate</code>).</li>
-            <li><strong>Confounders:</strong> Variables that influence both treatment and outcome (e.g., <code>Customer_Segment</code>, <code>Region</code>).</li>
-        </ul>
-        <p><strong>Data Preprocessing:</strong> Auto-Convert Booleans, Missing Value Imputation, Winsorization, Log Transformation, Standardization, Variable Bucketing, Data Filtering.</p>
-        <p><strong>Data Quality & Readiness:</strong> Generate an AI summary and view the Mathematical Readiness Assessment (Traffic Light system) to see exactly which causal models your dataset supports.</p>
-        <p><strong>Define Global Objective (Optional):</strong> Select your Target, Treatment, and Analysis Paradigm upfront. These globals automatically pre-configure all downstream charts and methods. For Spatiotemporal experiments (like GeoLift), your treatment is often an event space, so you may select "None" as the Treatment column.</p>
-    </div>
+    <h3>1. Data Preparation</h3>
+    <p><strong>Simulated Data:</strong> If you don't have a dataset, select "Simulated Data" to explore the app's features. We provide two distinct default sets (Observational vs Quasi-Experimental). You can also explicitly instruct the AI Assistant to launch the <strong>Data Simulator</strong> to generate heavily customized synthetic datasets modeling specific variables, noise levels, and true causal effect sizes.</p>
+    <p><strong>Upload Data:</strong> Upload your own CSV file. Ensure your data contains:</p>
+    <ul>
+        <li><strong>Treatment Column:</strong> The variable indicating the intervention (e.g., <code>Feature_Adoption</code>, <code>Marketing_Campaign</code>).</li>
+        <li><strong>Outcome Column:</strong> The metric you want to influence (e.g., <code>Account_Value</code>, <code>Conversion_Rate</code>).</li>
+        <li><strong>Confounders:</strong> Variables that influence both treatment and outcome (e.g., <code>Customer_Segment</code>, <code>Region</code>).</li>
+    </ul>
+    <p><strong>Data Preprocessing:</strong> Auto-Convert Booleans, Missing Value Imputation, Categorical Encoding, Winsorization, Log Transformation, Standardization, Feature Scaling, Variable Bucketing, and Data Filtering.</p>
+    <p><strong>Data Quality & Readiness:</strong> Generate an AI summary and view the Mathematical Readiness Assessment (Traffic Light system) to see exactly which causal models your dataset supports.</p>
 
     <h3>2. Step-by-Step Causal Analysis</h3>
-    <p>Select the analysis type based on your data structure. Observational for standard cross-sectional data, and Quasi-Experimental for time-series / natural experiments.</p>
+    <p>Select the analysis type based on your data structure. Observational for standard cross-sectional data, and Quasi-Experimental for time-series / natural experiments. You can also use the <strong>Recommend Method</strong> AI feature to let the system automatically detect the optimal architecture based on your selected Target and intervention.</p>
 
     <h4>A. Observational Analysis</h4>
     <p>Use this for standard cross-sectional analysis or when you have user-level data without a time-series dimension.</p>
