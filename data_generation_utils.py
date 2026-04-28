@@ -378,6 +378,65 @@ def generate_data_quality_summary(df: pd.DataFrame, api_key: str) -> str:
         return f"Could not generate summary: {str(e)}"
 
 
+def generate_method_recommendation(df: pd.DataFrame, target: str, treatment: str, api_key: str) -> str:
+    """
+    Uses AI to analyze the dataset relative to the explicit target and treatment variables
+    and recommends the optimal Causal Inference method.
+    """
+    import numpy as np
+    
+    n_rows, n_cols = df.shape
+    cols = df.columns.tolist()
+    
+    target_info = f"Numeric, {df[target].nunique()} unique" if np.issubdtype(df[target].dtype, np.number) else f"Categorical, {df[target].nunique()} unique"
+    treatment_info = f"Numeric, {df[treatment].nunique()} unique" if np.issubdtype(df[treatment].dtype, np.number) else f"Categorical, {df[treatment].nunique()} unique"
+    
+    date_cols = [c for c in cols if pd.api.types.is_datetime64_any_dtype(df[c]) or 'date' in c.lower()]
+    
+    profile = f"""
+    Dataset Map:
+    - Total Rows: {n_rows}
+    - Total Columns: {n_cols}
+    - Potential Time Series Columns: {date_cols}
+    
+    Explicit Analytical Goal:
+    - TARGET METRIC (Y): '{target}' ({target_info})
+    - TREATMENT INTERVENTION (X): '{treatment}' ({treatment_info})
+    """
+    
+    prompt = f"""
+    You are a senior econometrician and causal inference expert.
+    The user wants to measure the causal impact of their Treatment variable on their Target variable.
+    
+    Here is the structural map of their uploaded dataset:
+    {profile}
+    
+    Your job is to recommend the OPTIMAL causal inference method from the following list:
+    - Difference-in-Differences (DiD)
+    - Bayesian Structural Time Series (CausalImpact)
+    - Synthetic Control (GeoLift / CausalPy)
+    - Double Machine Learning (DML) / Causal Forests
+    - Meta-Learners (S-Learner, T-Learner)
+    - Propensity Score Matching (PSM) / Inverse Propensity Weighting (IPTW)
+    - Traditional OLS / Logistic Regression
+    
+    Provide a concise (2-3 paragraphs) recommendation. 
+    1. First, state clearly which method(s) you recommend.
+    2. Then explain *why* it is the best fit mathematically based on the characteristics of the Target, Treatment, and the presence (or absence) of Time Series variables.
+    3. Quickly note any structural constraints (e.g., "Since Treatment has >2 values, PSM won't work, but DML will.").
+    """
+    
+    client = genai.Client(api_key=api_key)
+    try:
+        response = client.models.generate_content(
+            model='gemini-3-flash-preview',
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.3)
+        )
+        return response.text
+    except Exception as e:
+        return f"Could not generate recommendation: {str(e)}"
+
 def generate_chart_suggestions(df: pd.DataFrame, api_key: str) -> str:
     """
     Uses AI to suggest relevant chart configurations for the loaded dataset.

@@ -666,7 +666,28 @@ with tab_eda:
                 st.warning(f"Could not calculate readiness: {e}")
                 
             st.write("---")
-
+            
+            st.markdown("### 🎯 Define Your Objective")
+            st.write("Based on the data profile above, please select the specific metrics you want to evaluate. These selections will intelligently configure your subsequent analysis.")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                target_var = st.selectbox("🎯 Target Variable (Outcome / KPI)", df.columns, key="global_target")
+            with col2:
+                treatment_var = st.selectbox("💊 Treatment Variable (Intervention)", df.columns, key="global_treatment")
+                
+            if target_var and treatment_var and target_var != treatment_var:
+                if st.button("🧠 Recommend Optimal Causal Method", key="ai_method_btn"):
+                    if not check_api_limit():
+                        st.stop()
+                    with st.spinner("AI is determining the optimal causal method based on your target setup..."):
+                        method_rec = data_generation_utils.generate_method_recommendation(df, target_var, treatment_var, chatbot_utils.get_api_key())
+                        st.session_state.ai_method_recommendation = method_rec
+                
+            if st.session_state.get('ai_method_recommendation'):
+                st.info(st.session_state.ai_method_recommendation)
+                
+            st.write("---")
         with st.expander("Show Summary Statistics", expanded=False):
             df_summary = df.copy()
             for col in df_summary.columns:
@@ -1065,7 +1086,8 @@ with tab_eda:
     col_x, col_y, col_color = st.columns(3)
     
     with col_x:
-        x_var = st.selectbox("X Variable", df_plot_source.columns)
+        default_x_idx = list(df_plot_source.columns).index(st.session_state.global_treatment) if st.session_state.get('global_treatment') in df_plot_source.columns else 0
+        x_var = st.selectbox("X Variable", df_plot_source.columns, index=default_x_idx)
     
     # Initialize variables
     y_vars = None
@@ -1079,11 +1101,13 @@ with tab_eda:
             st.markdown("*N/A for this chart type*")
         else:
             # Multi-select for Y variables
-            # Default to first non-X numeric column if possible
             numeric_cols = df_plot_source.select_dtypes(include=[np.number]).columns.tolist()
-            default_y = [c for c in numeric_cols if c != x_var][:1]
-            if not default_y and len(df_plot_source.columns) > 1:
-                default_y = [df_plot_source.columns[1]]
+            if st.session_state.get('global_target') in df_plot_source.columns:
+                default_y = [st.session_state.global_target]
+            else:
+                default_y = [c for c in numeric_cols if c != x_var][:1]
+                if not default_y and len(df_plot_source.columns) > 1:
+                    default_y = [df_plot_source.columns[1]]
                 
             y_vars = st.multiselect("Y Variable(s)", df_plot_source.columns, default=default_y)
             
@@ -1320,7 +1344,8 @@ with tab_config:
         if st.session_state.get('config_guide'):
             st.success(st.session_state.config_guide)
 
-        treatment = st.selectbox("Treatment (Action)", df.columns, index=get_index(df.columns, 'Feature_Adoption', 2))
+        default_t_idx = list(df.columns).index(st.session_state.global_treatment) if st.session_state.get('global_treatment') in df.columns else get_index(df.columns, 'Feature_Adoption', 2)
+        treatment = st.selectbox("Treatment (Action)", df.columns, index=default_t_idx)
     
         # -----------------------------------------------------------
         # Handle Categorical Treatment
@@ -1344,7 +1369,8 @@ with tab_config:
             # Update treatment variable to point to new column
             treatment = 'Treatment_Encoded'
         # ----------------------------------------------------------- 
-        outcome = st.selectbox("Outcome (Result)", df.columns, index=get_index(df.columns, 'Account_Value', 3))
+        default_y_idx = list(df.columns).index(st.session_state.global_target) if st.session_state.get('global_target') in df.columns else get_index(df.columns, 'Account_Value', 3)
+        outcome = st.selectbox("Outcome (Result)", df.columns, index=default_y_idx)
         
         # Check for Binary Outcome
         is_binary_outcome = False
@@ -1399,8 +1425,11 @@ with tab_config:
             
             col_q1, col_q2 = st.columns(2)
             with col_q1:
-                did_treatment = st.selectbox("Treatment Column (Intervention)", df.columns, key="did_t")
-                did_outcome = st.selectbox("Outcome Column", df.columns, key="did_y")
+                did_t_idx = list(df.columns).index(st.session_state.global_treatment) if st.session_state.get('global_treatment') in df.columns else 0
+                did_treatment = st.selectbox("Treatment Column (Intervention)", df.columns, index=did_t_idx, key="did_t")
+                
+                did_o_idx = list(df.columns).index(st.session_state.global_target) if st.session_state.get('global_target') in df.columns else 0
+                did_outcome = st.selectbox("Outcome Column", df.columns, index=did_o_idx, key="did_y")
             with col_q2:
                 did_time = st.selectbox("Time Period Column (0=Pre, 1=Post)", df.columns, key="did_time", help="Must be a binary indicator or boolean where 1 indicates Post-Intervention period.")
                 did_confounders = st.multiselect("Control Variables", [c for c in df.columns if c not in [did_treatment, did_outcome, did_time]], key="did_conf")
@@ -1475,7 +1504,8 @@ with tab_config:
             col_r2_1, col_r2_2 = st.columns(2)
             with col_r2_1:
                 num_cols = df.select_dtypes(include=[np.number]).columns
-                ci_outcome = st.selectbox("Outcome Column (to aggregate)", num_cols, index=get_index(num_cols, "Daily_Revenue", 0), key="ci_y")
+                ci_o_idx = list(num_cols).index(st.session_state.global_target) if st.session_state.get('global_target') in num_cols else get_index(num_cols, "Daily_Revenue", 0)
+                ci_outcome = st.selectbox("Outcome Column (to aggregate)", num_cols, index=ci_o_idx, key="ci_y")
             
             with col_r2_2:
                  if st.session_state.get('sim_type') == 'BSTS Demo':
@@ -1561,7 +1591,8 @@ with tab_config:
                     
                     # Dynamic filter to prevent KPI from being a covariate and vice versa
                     kpi_options = [c for c in num_cols if c not in pow_covariates]
-                    power_kpi = st.selectbox("Outcome Column", kpi_options, index=get_index(kpi_options, 'KPI', 0) if len(kpi_options) > 0 else 0, key="pow_kpi")
+                    pow_o_idx = list(kpi_options).index(st.session_state.global_target) if st.session_state.get('global_target') in kpi_options else (get_index(kpi_options, 'KPI', 0) if len(kpi_options) > 0 else 0)
+                    power_kpi = st.selectbox("Outcome Column", kpi_options, index=pow_o_idx, key="pow_kpi")
                 
                 power_duration = st.number_input("Expected Treatment Duration (Days)", min_value=1, value=60, key="pow_dur", help="How long do you expect the marketing test to run?")
                 
@@ -1665,7 +1696,8 @@ with tab_config:
                     num_cols = df.select_dtypes(include=[np.number]).columns
                     
                     kpi_est_options = [c for c in num_cols if c not in est_covariates]
-                    geo_lift_kpi = st.selectbox("Outcome Column", kpi_est_options, index=get_index(kpi_est_options, 'KPI', 0) if len(kpi_est_options) > 0 else 0, key="gl_kpi")
+                    gl_o_idx = list(kpi_est_options).index(st.session_state.global_target) if st.session_state.get('global_target') in kpi_est_options else (get_index(kpi_est_options, 'KPI', 0) if len(kpi_est_options) > 0 else 0)
+                    geo_lift_kpi = st.selectbox("Outcome Column", kpi_est_options, index=gl_o_idx, key="gl_kpi")
                     
                     treated_geo_options = []
                     if geo_lift_geo in df.columns:
@@ -1740,7 +1772,8 @@ with tab_config:
                 
             with col_cp2:
                 num_cols = df.select_dtypes(include=[np.number]).columns
-                cp_kpi = st.selectbox("Outcome (KPI) Column", num_cols, index=get_index(num_cols, 'KPI', 0) if len(num_cols) > 0 else 0, key="cp_kpi")
+                cp_o_idx = list(num_cols).index(st.session_state.global_target) if st.session_state.get('global_target') in num_cols else (get_index(num_cols, 'KPI', 0) if len(num_cols) > 0 else 0)
+                cp_kpi = st.selectbox("Outcome (KPI) Column", num_cols, index=cp_o_idx, key="cp_kpi")
                 
                 treated_geo_options_cp = []
                 if cp_geo in df.columns:
